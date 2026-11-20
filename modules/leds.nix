@@ -11,7 +11,7 @@ let
   # Out-of-tree led-ugreen kernel module for the UGREEN DXP4800 Plus front-panel
   # I2C LED controller (SMBus I801 @ 0x3a). Exposes /sys/class/leds/{power,netdev,disk1..disk4}.
   ledUgreenKmod = config.boot.kernelPackages.callPackage (
-    { stdenv, kernel }:
+    { stdenv, kernel, kernelModuleMakeFlags }:
     stdenv.mkDerivation {
       pname = "led-ugreen";
       version = "0.1-unstable-f0fcd81";
@@ -25,15 +25,18 @@ let
         runHook preBuild
         make -C "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build" \
           M="$PWD" \
-          ${lib.escapeShellArgs kernel.makeFlags} \
+          ${lib.escapeShellArgs kernelModuleMakeFlags} \
           modules
         runHook postBuild
       '';
 
       installPhase = ''
         runHook preInstall
-        install -D -m 0644 led-ugreen.ko \
-          "$out/lib/modules/${kernel.modDirVersion}/extra/led-ugreen.ko"
+        make -C "${kernel.dev}/lib/modules/${kernel.modDirVersion}/build" \
+          M="$PWD" \
+          ${lib.escapeShellArgs kernelModuleMakeFlags} \
+          INSTALL_MOD_PATH="$out" \
+          modules_install
         runHook postInstall
       '';
     }
