@@ -19,6 +19,7 @@
           comin.nixosModules.comin
           ./hosts/younix/configuration.nix
           ./modules/gitops.nix
+          ./modules/thermals.nix
         ];
       };
     };
