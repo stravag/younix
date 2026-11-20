@@ -71,8 +71,10 @@
     git
     vim
     htop
+    btop
     tmux
     curl
+    efibootmgr
     smartmontools
     nvme-cli
     lm_sensors
