@@ -1,0 +1,253 @@
+# younix — Roadmap & Agent Tasklist
+
+Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus running GitOps-managed NixOS).
+
+## For Agents: How to Use This File
+
+- **Public repository**: `github:stravag/younix` is public. **Never** commit plaintext passwords, API keys, auth keys, or private keys.
+- **Module conventions**: Put each feature in its own `modules/<feature>.nix` file and register it in `flake.nix`. Keep host-specific settings in `hosts/younix/configuration.nix`.
+- **Safe rollouts**: For risky changes (storage mounts, networking, firewall, SSH, bootloader), test on the `testing-younix` branch first (`comin` activates temporarily via `test`, so a reboot reverts to `main`).
+- **Task statuses**:
+  - `done` — Completed and deployed.
+  - `ready` — Unblocked and has enough context for an agent to implement.
+  - `needs-decision` — Requires a user choice (see the **Open Decisions** note in the task) before implementation.
+  - `blocked` — Waiting on one or more `Depends on` tasks.
+  - `in-progress` — Currently being worked on.
+- **When finishing a task**:
+  1. Run the task's verification steps (and `nix flake check` if available).
+  2. Update the task's `Status` to `done`, check its boxes, and link the added module(s).
+  3. Unblock downstream tasks whose dependencies are now all `done` (move them to `ready` or `needs-decision`).
+  4. Keep `README.md` updated with any new modules or operational commands.
+
+## Target Architecture
+
+- **Hardware**: UGREEN NASync DXP4800 Plus (Intel Pentium Gold 8505 w/ QuickSync iGPU, 1 TB NVMe for NixOS + fast app data, 128 GB factory UGOS Pro untouched, 4x SATA bays starting with 2x 4 TB HDDs → expanding to 4x 4 TB after migrating from the old NAS).
+- **Storage layout**:
+  - **1 TB NVMe**: NixOS root, PostgreSQL/Redis databases, Immich thumbnails/cache, Paperless index/data.
+  - **HDD array**: Bulk data split into separate subvolumes/datasets (`photos`, `documents`, `media`, `backups`, `share`) so irreplaceable data (`photos`, `documents`, DB dumps) can be snapshotted and backed up offsite without paying to back up large `media` files.
+- **Remote access**: Tailscale (zero router port-forwarding) + Caddy reverse proxy for clean HTTPS URLs.
+- **Services**: Native NixOS modules (`services.jellyfin`, `services.immich`, `services.paperless`) instead of ad-hoc containers for cleaner upgrades and QuickSync access.
+
+---
+
+## Completed
+
+### T-001 — Bootstrap instructions & key commands in README
+- **Status**: `done`
+- **Artifacts**: `README.md`
+- **Summary**: Documented USB creation, BIOS watchdog disable, 1 TB NVMe partitioning (preserving factory 128 GB UGOS SSD), `nixos-install` from GitHub flake, and daily `comin` commands.
+
+### T-002 — Pull-based GitOps with `comin`
+- **Status**: `done`
+- **Artifacts**: `modules/gitops.nix`
+- **Summary**: Enabled `services.comin` polling `https://github.com/stravag/younix.git` (`main` branch, with `testing-younix` support for safe test deployments).
+
+### T-003 — Thermal & fan control
+- **Status**: `done`
+- **Artifacts**: `modules/thermals.nix`
+- **Summary**: Built out-of-tree `it87` driver (IT8613E) + `drivetemp`, enabled `thermald` and `powersave` governor, and deployed `younix-fancontrol` daemon with fail-safe restore to hardware auto mode.
+
+### T-004 — UGREEN front-panel LED controller
+- **Status**: `done`
+- **Artifacts**: `modules/leds.nix`
+- **Summary**: Built out-of-tree `led-ugreen` kernel module (I2C @ `0x3a`) and `younix-leds` daemon controlling power, LAN (`netdev`), and bay 1–4 disk LEDs (activity blinking + standby-safe SMART fault indicator).
+
+---
+
+## Phase 0 — Housekeeping
+
+### T-005 — Sync `README.md` with current repo state
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Fix minor doc drift in `README.md`.
+- **Scope**:
+  - Add `modules/thermals.nix`, `modules/leds.nix`, and `TASKS.md` to the Layout section.
+  - Update the `comin` polling note (currently says `~60 seconds`, while `modules/gitops.nix` is set to `3600` seconds / 1 hour).
+- **Verification**: Review `README.md` against `flake.nix` and `modules/gitops.nix`.
+
+---
+
+## Phase 1 — Foundation (Secrets & Storage)
+
+### T-006 — Secrets management with `sops-nix`
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Enable encrypted declarative secrets so credentials (Samba, Paperless, backups, alerts) can be safely stored in this public repo.
+- **Scope**:
+  - Add `sops-nix` input to `flake.nix` and create `modules/secrets.nix`.
+  - Configure `.sops.yaml` using `younix`'s SSH host ed25519 key (converted to age via `ssh-to-age`) plus a local admin age key on macOS so secrets can be edited from the Mac.
+  - Document the workflow for creating/editing encrypted secrets in `README.md`.
+- **Manual steps**:
+  - Fetch `younix`'s public SSH host key (`ssh-keyscan` / `/etc/ssh/ssh_host_ed25519_key.pub`) and generate/back up a personal `age` key on macOS.
+- **Verification**:
+  - Add a harmless test secret or verify `sops` decryption on `younix` under `/run/secrets/`.
+
+### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
+- **Status**: `needs-decision`
+- **Depends on**: none
+- **Open decision**: Choose the array technology for the 4 SATA bays:
+  1. **Recommended — Btrfs RAID1**: Start with 2x 4 TB (4 TB usable), add 2x 4 TB online later (8 TB usable), and replace *individual* disks with larger ones later with immediate capacity gain (as long as no single disk exceeds the sum of the others). Native Linux kernel, CoW snapshots, checksums, `zstd` compression. Trade-off: 50% usable capacity.
+  2. **Alternative — MergerFS + SnapRAID**: Start with 1 data + 1 parity (4 TB usable), add 2x 4 TB data disks later (12 TB usable, 75% efficiency). Single-disk upgrades work once the parity disk is at least as large as the biggest data disk. Trade-off: parity is scheduled (not real-time) and no native CoW snapshots.
+- **Scope**:
+  - Create `modules/storage.nix` declaring mount points (e.g., `/mnt/data` and subvolumes/dirs for `photos`, `documents`, `media`, `backups`, `share`), mount options (`noatime`, `compress=zstd`, `nofail` where appropriate), and filesystem maintenance (e.g. monthly `btrfs scrub`).
+  - Document the one-time disk creation & formatting commands (by `/dev/disk/by-id/...`) in `README.md`.
+- **Manual steps**:
+  - Wipe/format the initial 2x 4 TB HDDs on `younix` and create initial subvolumes/directories.
+  - Verify `hardware-configuration.nix` or `modules/storage.nix` mounts cleanly across reboot.
+- **Verification**:
+  - `findmnt /mnt/data`, `btrfs filesystem usage /mnt/data` (if Btrfs), reboot test on `testing-younix` branch.
+
+### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
+- **Status**: `blocked`
+- **Depends on**: `T-007`
+- **Goal**: Proactively detect failing drives and optionally spin down idle HDDs without conflicting with LED or fan daemons.
+- **Scope**:
+  - Enable `services.smartd` in `modules/storage.nix` with scheduled short (weekly) and long (monthly) self-tests, configured with `-n standby` so sleeping drives aren't woken unnecessarily.
+  - Evaluate and optionally enable `hd-idle` for HDD spindown; verify `modules/thermals.nix` (`drivetemp`) and `modules/leds.nix` (`smartctl -n standby`) do not spin drives back up.
+- **Verification**:
+  - `systemctl status smartd`, `smartctl -i /dev/sdX`, confirm `younix-fancontrol` and `younix-leds` logs remain error-free.
+
+### T-009 — Expand HDD array with 2nd pair of 4 TB drives (post-migration)
+- **Status**: `blocked`
+- **Depends on**: `T-007`
+- **Goal**: After migrating data from the old NAS, install the remaining 2x 4 TB drives and grow the pool online.
+- **Scope**:
+  - Document the exact expansion procedure in `README.md` (e.g., `btrfs device add` + `btrfs balance start -dconvert=raid1 -mconvert=raid1c3` or `raid1`, or SnapRAID/MergerFS addition).
+  - Update `modules/storage.nix` if any new device references are needed.
+- **Manual steps**:
+  - Copy data from old NAS to `younix`, physically install bays 3 & 4, and run the online expansion.
+- **Verification**:
+  - Confirm bays 1–4 LEDs are all active white (`younix-leds`), `df -h /mnt/data` shows expanded space, and scrub passes with 0 errors.
+
+---
+
+## Phase 2 — Access & Networking
+
+### T-010 — Remote access via Tailscale (zero port-forwarding)
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Access `younix` and its web services securely from anywhere without opening router ports.
+- **Scope**:
+  - Create `modules/remote-access.nix` enabling `services.tailscale` with `openFirewall = true`, trusted `tailscale0` interface, and `useRoutingFeatures = "server"` (optional, if subnet routing/exit node is wanted).
+  - Configure Tailscale HTTPS certificates (MagicDNS + HTTPS enabled in Tailscale admin) so Caddy can obtain valid TLS certs automatically.
+- **Manual steps**:
+  - One-time interactive `sudo tailscale up` on `younix` (avoids storing reusable auth keys in git) and enable MagicDNS + HTTPS in the Tailscale admin console.
+- **Verification**:
+  - `tailscale status`, SSH and ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
+
+### T-011 — Local file sharing via Samba (macOS-friendly)
+- **Status**: `blocked`
+- **Depends on**: `T-006`, `T-007`
+- **Goal**: Mount NAS shares smoothly from macOS Finder, expose a Paperless `consume` drop folder, and optionally support Time Machine.
+- **Scope**:
+  - Create `modules/samba.nix` enabling `services.samba` + `services.samba-wsdd` (and Avahi SMB advertisement for macOS Finder discovery).
+  - Enable macOS `vfs objects = fruit streams_xattr` optimizations.
+  - Define shares: e.g., `media`, `paperless-inbox` (mapped to Paperless consumption dir), `share` (general), and optional `timemachine`.
+  - Provision Samba user password securely (via `sops-nix` or documented one-time `smbpasswd`).
+- **Verification**:
+  - Connect from macOS (`smb://younix.local`), test read/write speeds and permissions.
+
+### T-012 — Reverse proxy & HTTPS with Caddy
+- **Status**: `blocked`
+- **Depends on**: `T-010`
+- **Goal**: Serve Jellyfin, Immich, and Paperless over HTTPS on clean URLs without remembering ports.
+- **Open decision** (confirm before coding):
+  - **Option A (Simplest, no domain needed)**: Use Tailscale Serve or Caddy with `younix.<tailnet>.ts.net` (separate ports or paths, or Tailscale Services).
+  - **Option B (Cleanest UX)**: Own a cheap domain (e.g., `jellyfin.home.example.com`, `photos.home.example.com`, `docs.home.example.com`) pointing to the Tailscale/LAN IP with Caddy DNS-01 ACME certs (requires DNS API token in `sops-nix`).
+- **Scope**:
+  - Create `modules/proxy.nix` configuring `services.caddy` (or Tailscale Serve integration) and firewall rules (restricting proxy ports to LAN / `tailscale0` as desired).
+- **Verification**:
+  - `systemctl status caddy`, `curl -I https://...` returns valid TLS cert with no browser warnings.
+
+---
+
+## Phase 3 — Self-Hosted Services
+
+### T-013 — Intel QuickSync hardware acceleration
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Expose Intel Alder Lake iGPU (`/dev/dri/renderD128`) for hardware video transcoding (Jellyfin, Immich).
+- **Scope**:
+  - Create `modules/graphics.nix` (or add to `hosts/younix/configuration.nix`) enabling `hardware.graphics` with `pkgs.intel-media-driver` and `pkgs.vpl-gpu-rt` (plus `intel-gpu-tools` / `libva-utils` for diagnostics).
+- **Verification**:
+  - `vainfo` on `younix` lists H.264 / HEVC / AV1 decode and H.264 / HEVC encode profiles without errors.
+
+### T-014 — Jellyfin media server
+- **Status**: `blocked`
+- **Depends on**: `T-007`, `T-012`, `T-013`
+- **Goal**: Deploy Jellyfin natively with Intel QuickSync hardware transcoding and media stored on the HDD array.
+- **Scope**:
+  - Create `modules/services/jellyfin.nix` enabling `services.jellyfin`.
+  - Add the `jellyfin` user to `video` and `render` groups (and shared media group for read access to `/mnt/data/media`).
+  - Keep Jellyfin cache/metadata on the fast NVMe (`/var/lib/jellyfin`).
+  - Add reverse proxy route in `modules/proxy.nix`.
+- **Verification**:
+  - Stream a video and trigger transcoding; verify GPU usage with `intel_gpu_top`.
+
+### T-015 — Immich photo & video management
+- **Status**: `blocked`
+- **Depends on**: `T-006`, `T-007`, `T-012`, `T-013`
+- **Goal**: Deploy Immich natively with originals on the HDD array and database/thumbnails on the NVMe for fast browsing.
+- **Scope**:
+  - Create `modules/services/immich.nix` enabling `services.immich`.
+  - Configure `mediaLocation` on the HDD array (`/mnt/data/photos`), while keeping PostgreSQL and (optionally) `thumbs`/`encoded-video` fast storage on the NVMe.
+  - Grant `immich` access to `/dev/dri` (`video`, `render`) for hardware video transcoding.
+  - Add reverse proxy route in `modules/proxy.nix` (with large upload body limits for mobile video backups).
+- **Verification**:
+  - Upload photos/videos via web UI and Immich mobile app (both LAN and over Tailscale); verify thumbnails generate and originals land on `/mnt/data/photos`.
+
+### T-016 — Paperless-ngx document management
+- **Status**: `blocked`
+- **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`
+- **Goal**: Deploy Paperless-ngx natively with OCR, HDD document storage, and a Samba-accessible `consume` inbox folder.
+- **Scope**:
+  - Create `modules/services/paperless.nix` enabling `services.paperless` with `mediaDir` on `/mnt/data/documents`, `consumptionDir` wired to the Samba inbox share, and admin password via `sops-nix`.
+  - Configure OCR languages (e.g. `eng+deu` — confirm preferred languages).
+  - Enable `database.createLocally = true` (PostgreSQL on NVMe).
+  - Add reverse proxy route in `modules/proxy.nix`.
+- **Verification**:
+  - Drop a test PDF into the Samba inbox from macOS; confirm Paperless ingests, OCRs, indexes, and stores it under `/mnt/data/documents`.
+
+---
+
+## Phase 4 — Backups, Observability & CI
+
+### T-017 — Local snapshots & database dumps
+- **Status**: `blocked`
+- **Depends on**: `T-007`
+- **Goal**: Protect against accidental deletion or bad app updates with automated local snapshots and consistent DB dumps.
+- **Scope**:
+  - Configure automated local snapshots (e.g., `services.snapper` or `btrbk` if Btrfs) for `photos` and `documents` with sensible retention (hourly/daily/weekly).
+  - Configure `services.postgresqlBackup` (dumping Immich & Paperless databases nightly to a backup folder on `/mnt/data/backups/postgres`).
+- **Verification**:
+  - Run backup/snapshot timers manually; verify snapshots and SQL dumps exist and are non-empty.
+
+### T-018 — Automated offsite backups (`restic`)
+- **Status**: `needs-decision`
+- **Depends on**: `T-006`, `T-007`, `T-017`
+- **Open decision**: Choose an offsite storage target (e.g., Hetzner Storage Box, Backblaze B2, Cloudflare R2, or a remote friend/family machine).
+- **Scope**:
+  - Create `modules/backups.nix` using `services.restic.backups` with repository password & credentials stored via `sops-nix`.
+  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`), explicitly excluding bulk `/mnt/data/media`.
+  - Configure retention (`pruneOpts`) and periodic `checkOpts` to verify backup integrity.
+- **Verification**:
+  - Trigger a backup run, inspect `restic snapshots`, and perform a test restore of one file to `/tmp`.
+
+### T-019 — System health & failure notifications
+- **Status**: `needs-decision`
+- **Depends on**: `T-006`
+- **Open decision**: Choose notification channel (e.g., `ntfy.sh`, Pushover, Telegram bot, Discord webhook, or SMTP email).
+- **Scope**:
+  - Create `modules/alerts.nix` with a reusable systemd `OnFailure=` notification unit.
+  - Wire alerts to: `smartd` warnings, scrub failures, `restic` backup failures, and `comin` deployment failures.
+- **Verification**:
+  - Trigger a test notification and confirm delivery on phone/Mac.
+
+### T-020 — GitHub Actions CI for NixOS config validation
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Catch Nix syntax/evaluation/build errors in CI before `comin` pulls broken commits.
+- **Scope**:
+  - Add `.github/workflows/check.yml` running `nix flake check` and `nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link` on pushes and PRs.
+- **Verification**:
+  - Push workflow and verify green run in GitHub Actions.
