@@ -28,7 +28,7 @@ comin status
 journalctl -u comin -f
 
 # Trigger an immediate fetch/deploy without waiting for the poll interval
-sudo comin fetch
+comin fetch
 ```
 
 ---
