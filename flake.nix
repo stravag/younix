@@ -20,6 +20,7 @@
           ./hosts/younix/configuration.nix
           ./modules/gitops.nix
           ./modules/thermals.nix
+          ./modules/leds.nix
         ];
       };
     };
