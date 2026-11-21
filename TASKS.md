@@ -57,6 +57,11 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Artifacts**: `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
 - **Summary**: Updated layout with `thermals.nix`, `leds.nix`, `storage.nix`, and `TASKS.md`, corrected `comin` polling interval to 1 hour, and split documentation into a concise `README.md`, one-time `docs/bootstrap.md`, and day-to-day/recovery `docs/runbook.md`.
 
+### T-006 — Secrets management with `sops-nix`
+- **Status**: `done`
+- **Artifacts**: `.sops.yaml`, `flake.nix`, `flake.lock`, `modules/secrets.nix`, `secrets/secrets.yaml`, `docs/bootstrap.md`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled `sops-nix` using a dedicated host `age` key at `/etc/keys/sops.key` (backed up alongside `/etc/keys/hdd.key`) plus a macOS admin `age` key (`~/Library/Application Support/sops/age/keys.txt`). Verified end-to-end encryption on macOS and tmpfs decryption to `/run/secrets/test_secret` on `younix`.
+
 ### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
 - **Status**: `done`
 - **Artifacts**: `modules/storage.nix`, `flake.nix`, `docs/bootstrap.md`, `docs/runbook.md`
@@ -65,19 +70,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ---
 
 ## Phase 1 — Foundation (Secrets & Storage)
-
-### T-006 — Secrets management with `sops-nix`
-- **Status**: `in-progress`
-- **Depends on**: none
-- **Goal**: Enable encrypted declarative secrets so credentials (Samba, Paperless, backups, alerts) can be safely stored in this public repo.
-- **Scope**:
-  - Add `sops-nix` input to `flake.nix` and create `modules/secrets.nix`.
-  - Configure `.sops.yaml` using `younix`'s dedicated host `age` key (`/etc/keys/sops.key`, backed up alongside `/etc/keys/hdd.key`) plus a local admin `age` key on macOS so secrets can be edited from the Mac.
-  - Document the workflow for creating/editing encrypted secrets and restoring `/etc/keys/sops.key` in `docs/runbook.md` and `docs/bootstrap.md`.
-- **Manual steps**:
-  - Generate and back up the macOS admin `age` key (`~/Library/Application Support/sops/age/keys.txt`) and `younix`'s host key (`/etc/keys/sops.key`).
-- **Verification**:
-  - Add a harmless test secret (`test_secret`) and verify `sops` decryption on `younix` under `/run/secrets/test_secret`.
 
 ### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
 - **Status**: `ready`
@@ -118,7 +110,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - `tailscale status`, SSH and ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
 
 ### T-011 — Local file sharing via Samba (macOS-friendly)
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`
 - **Goal**: Mount NAS shares smoothly from macOS Finder, expose a Paperless `consume` drop folder, and optionally support Time Machine.
 - **Scope**:
