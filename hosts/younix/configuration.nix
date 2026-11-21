@@ -31,7 +31,7 @@
   time.timeZone = "Europe/Zurich";
   i18n.defaultLocale = "en_US.UTF-8";
 
-  # User account
+  # User accounts (Samba share access & passwords are configured in modules/samba.nix)
   users.users.ranil = {
     isNormalUser = true;
     description = "Ranil";

@@ -61,16 +61,16 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - `tailscale status`, SSH and ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
 
 ### T-011 — Local file sharing via Samba (macOS-friendly)
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: `T-006`, `T-007`
 - **Goal**: Mount NAS shares smoothly from macOS Finder, expose a Paperless `consume` drop folder, and optionally support Time Machine.
 - **Scope**:
   - Create `modules/samba.nix` enabling `services.samba` + `services.samba-wsdd` (and Avahi SMB advertisement for macOS Finder discovery).
   - Enable macOS `vfs objects = fruit streams_xattr` optimizations.
-  - Define shares: e.g., `media`, `paperless-inbox` (mapped to Paperless consumption dir), `share` (general), and optional `timemachine`.
-  - Provision Samba user password securely (via `sops-nix` or documented one-time `smbpasswd`).
+  - Define initial shares (`media`, `photos`) with a declarative share list so additional shares (`share`, `paperless-inbox`, `timemachine`, etc.) can be added in a few lines later.
+  - Provision per-user Samba passwords declaratively via `sops-nix` (`samba_passwords.<user>` in `secrets/secrets.yaml`).
 - **Verification**:
-  - Connect from macOS (`smb://younix.local`), test read/write speeds and permissions.
+  - Add `samba_passwords.ranil` to `secrets/secrets.yaml`, deploy, connect from macOS (`smb://younix.local`), and test read/write speeds and permissions.
 
 ### T-012 — Reverse proxy & HTTPS with Caddy
 - **Status**: `blocked`

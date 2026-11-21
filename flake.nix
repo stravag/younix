@@ -29,6 +29,7 @@
           ./modules/thermals.nix
           ./modules/leds.nix
           ./modules/storage.nix
+          ./modules/samba.nix
         ];
       };
     };

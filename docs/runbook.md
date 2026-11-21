@@ -323,3 +323,49 @@ sudo snapraid status
 ```
 
 If the same drive repeatedly develops bad blocks, check `sudo smartctl -a /dev/sdX`—it is likely beginning to fail and should be proactively replaced using [Scenario 1](#scenario-1--replacing-a-failed-data-drive-d1-d2-or-d3) or [Scenario 2](#scenario-2--replacing-a-failed-parity-drive-parity1).
+
+---
+
+## 6. File Sharing (Samba)
+
+SMB3 shares are managed declaratively in `modules/samba.nix` with macOS Finder optimizations (`vfs_fruit` + `streams_xattr`), Avahi/Bonjour discovery, WSDD (Windows discovery), and declarative password provisioning via `sops-nix`.
+
+### Connecting from macOS
+
+1. Open **Finder** → **Locations / Network** → **`younix`** (or press **`Cmd + K`** and enter `smb://younix.local`).
+2. Connect as **Registered User** with your username (e.g. `ranil`) and the matching password under `samba_passwords.<username>` in `secrets/secrets.yaml`.
+
+### Setting or Rotating a Samba Password
+
+Edit `secrets/secrets.yaml` on your Mac and set/update the user's entry under `samba_passwords`:
+
+```bash
+sops secrets/secrets.yaml
+```
+
+```yaml
+samba_passwords:
+  ranil: your-strong-samba-password
+```
+
+Commit and push; when `comin` deploys, `sops-nix` automatically restarts `younix-samba-passwd.service` to update Samba's password database.
+
+### Adding a New Share or Family Member
+
+- **New shared folder:** Add an entry under `sharedFolders` in `modules/samba.nix` and include its name in each user's `shares` list under `sambaUsers` (its Unix group, `2770` directory permissions, and `smb.conf` section are created automatically).
+- **New family member:** Define their NixOS account in `hosts/younix/configuration.nix`, add `samba_passwords.<name>` via `sops secrets/secrets.yaml`, and add them to `sambaUsers` in `modules/samba.nix` (set `personalShare = true` for a private `/mnt/data/users/<name>` folder).
+
+### Diagnostics
+
+```bash
+# Check Samba, discovery, and setup services
+systemctl status samba-smbd samba-wsdd younix-samba-dirs younix-samba-passwd
+
+# Inspect effective Samba config and active client connections
+testparm -s
+sudo smbstatus
+
+# Verify Samba user exists and check share directory permissions
+sudo pdbedit -L
+ls -ld /mnt/data/media /mnt/data/photos
+```

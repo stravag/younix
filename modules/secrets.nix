@@ -18,8 +18,6 @@
     # Disable unused GPG/SSH-RSA fallback paths
     gnupg.sshKeyPaths = [ ];
 
-    # Harmless test secret for verifying end-to-end decryption (/run/secrets/test_secret).
-    # Service-specific secrets should be declared in their respective service modules.
-    secrets.test_secret = { };
+    # Service-specific secrets are declared in their respective service modules.
   };
 }
