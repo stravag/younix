@@ -44,7 +44,25 @@ sudo snapraid diff
 # Check scheduled nightly sync (04:00) and weekly scrub (Sun 05:30) logs
 journalctl -u snapraid-precheck -u snapraid-sync -u snapraid-scrub -n 50
 systemctl list-timers 'snapraid*'
+
+# Check disk health (smartd) & HDD spindown state (hd-idle) without waking sleeping drives
+systemctl status smartd hd-idle
+journalctl -u smartd -u hd-idle -n 30
+sudo hdparm -C /dev/sd?
+for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -n standby -H -l selftest "$d"; done
 ```
+
+### Disk Health (`smartd`) & HDD Spindown (`hd-idle`)
+
+- **`smartd`** monitors all SATA HDDs and NVMe SSDs (`DEVICESCAN`), runs weekly **Short** self-tests (Saturday `04:xx`) and monthly **Long** self-tests (1st of the month `04:xx`, aligned with the `04:00` SnapRAID sync window while HDDs are awake), and uses `-n standby,q` so routine 30-minute polls never spin up sleeping drives.
+- **`hd-idle`** spins down idle array HDDs after **30 minutes** (`1800s`) via ATA standby commands (`-c ata`), leaving NVMe SSDs and USB devices untouched (`-i 0`). Both `younix-fancontrol` (`hdparm -C` standby check before reading `drivetemp`) and `younix-leds` (`smartctl -n standby`) are standby-safe and will not wake sleeping drives.
+- If you run a **manual Long SMART self-test** (`sudo smartctl -t long /dev/sdX`, ~8–9 h on 4 TB WD Red Plus), pause `hd-idle` while it runs so standby commands don't interrupt it:
+  ```bash
+  sudo systemctl stop hd-idle
+  sudo smartctl -t long /dev/sdX
+  # Once complete (check with `sudo smartctl -l selftest /dev/sdX`):
+  sudo systemctl start hd-idle
+  ```
 
 ### When Automated Sync Aborts (`snapraid-precheck` Delete Threshold)
 

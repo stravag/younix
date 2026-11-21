@@ -16,9 +16,9 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `hosts/younix/hardware-configuration.nix` — Hardware & root filesystem definitions generated on the NAS.
 - `modules/gitops.nix` — Pull-based GitOps deployment with `comin` (polls `main` every 1 hour; supports `testing-younix`).
 - `modules/secrets.nix` — Encrypted declarative secrets via `sops-nix` (decrypted via `/etc/keys/sops.key` into `/run/secrets/`).
-- `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), `drivetemp`, `thermald`, and quiet `younix-fancontrol` daemon.
+- `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), `drivetemp`, `thermald`, and standby-safe quiet `younix-fancontrol` daemon.
 - `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller.
-- `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, and scheduled SnapRAID parity sync (with precheck guard) & weekly scrub.
+- `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
 - `secrets/secrets.yaml` — `age`-encrypted secrets file managed via `sops`.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.

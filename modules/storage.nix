@@ -34,6 +34,49 @@ let
   # removed since the last sync, protecting parity against accidental mass deletion.
   maxDeletedFiles = 100;
 
+  # Spin down idle array HDDs after 30 minutes of zero block I/O.
+  hddSpindownSeconds = 1800;
+
+  # Resolve each array disk's stable PARTLABEL to its parent whole-disk name (e.g. sda)
+  # and exec hd-idle targeting only those HDDs (`-i 0` leaves NVMe SSDs and USB drives untouched).
+  hdIdleStartScript = pkgs.writeShellScript "younix-hd-idle" ''
+    set -euo pipefail
+
+    args=(-i 0)
+    seen=" "
+    found=0
+
+    for partlabel in ${lib.concatMapStringsSep " " (d: lib.escapeShellArg d.partLabel) allDisks}; do
+      part="/dev/disk/by-partlabel/$partlabel"
+      if [ ! -e "$part" ]; then
+        echo "Warning: $part not present; skipping."
+        continue
+      fi
+
+      disk="$(${pkgs.util-linux}/bin/lsblk -ndo pkname "$part")"
+      if [ -z "$disk" ]; then
+        echo "Warning: could not resolve parent disk for $part; skipping."
+        continue
+      fi
+
+      case "$seen" in
+        *" $disk "*) continue ;;
+      esac
+      seen="$seen$disk "
+
+      echo "Managing spindown for /dev/$disk ($partlabel): ${toString hddSpindownSeconds}s (ATA)"
+      args+=(-a "$disk" -i ${toString hddSpindownSeconds} -c ata)
+      found=1
+    done
+
+    if [ "$found" -eq 0 ]; then
+      echo "No array HDDs detected; exiting."
+      exit 0
+    fi
+
+    exec ${pkgs.hd-idle}/bin/hd-idle "''${args[@]}"
+  '';
+
   mkCrypttabLine = disk:
     "${disk.mapper} /dev/disk/by-partlabel/${disk.partLabel} ${hddKeyFile} luks,nofail";
 
@@ -121,6 +164,8 @@ in
 
   environment.systemPackages = with pkgs; [
     cryptsetup
+    hd-idle
+    hdparm
     mergerfs
     mergerfs-tools
     snapraid
@@ -228,5 +273,30 @@ in
 
   systemd.services.snapraid-scrub = {
     after = [ "snapraid-sync.service" ];
+  };
+
+  # Proactive S.M.A.R.T. monitoring for SATA HDDs and NVMe SSDs.
+  # - `-a`: monitor default SMART health, error logs, and attributes
+  # - `-o on -S on`: enable automatic offline testing & attribute autosave (ATA/SATA; ignored on NVMe)
+  # - `-n standby,q`: skip routine 30-min checks while HDDs are spun down (quietly, no log spam)
+  # - `-s (...)`: weekly Short self-test (Sat 04:xx) & monthly Long self-test (1st of month 04:xx),
+  #   aligned with the nightly 04:00 SnapRAID sync window while HDDs are already awake.
+  services.smartd = {
+    enable = true;
+    autodetect = true;
+    defaults.autodetected = "-a -o on -S on -n standby,q -s (S/../../6/04|L/../01/./04)";
+  };
+
+  # Spin down idle array HDDs after inactivity for quieter acoustics & lower idle power.
+  systemd.services.hd-idle = {
+    description = "Spin down idle array HDDs after ${toString (hddSpindownSeconds / 60)} minutes";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "local-fs.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${hdIdleStartScript}";
+      Restart = "on-failure";
+      RestartSec = "10s";
+    };
   };
 }

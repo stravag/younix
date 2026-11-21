@@ -72,7 +72,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 1 — Foundation (Secrets & Storage)
 
 ### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: `T-007`
 - **Goal**: Proactively detect failing drives and optionally spin down idle HDDs without conflicting with LED or fan daemons.
 - **Scope**:

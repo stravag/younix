@@ -20,11 +20,14 @@ let
     import glob
     import os
     import signal
+    import subprocess
     import sys
     import time
 
     POLL_INTERVAL = 5
+    HDD_POLL_INTERVAL = 30.0
     FALLBACK_PWM = 128
+    HDPARM = "${pkgs.hdparm}/bin/hdparm"
 
     # Piecewise-linear curves: list of (temp_celsius, pwm_0_to_255)
     CPU_FAN_CURVE = [
@@ -111,30 +114,71 @@ let
         return current
 
 
-    def get_temperatures(hwmons):
+    def drivetemp_block_dev(hwmon_path):
+        for blk in sorted(glob.glob(os.path.join(hwmon_path, "device", "block", "sd*"))):
+            return os.path.basename(blk)
+        return None
+
+
+    def is_disk_standby(dev):
+        # ATA CHECK POWER MODE (0xE5): queries drive power state without waking sleeping HDDs.
+        try:
+            proc = subprocess.run(
+                [HDPARM, "-C", f"/dev/{dev}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            out = proc.stdout.lower()
+            return "standby" in out or "sleeping" in out
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+
+    def read_sensor_temp(path):
+        try:
+            return read_temp_c(path)
+        except OSError:
+            return None
+
+
+    def get_core_and_nvme_temps(hwmons):
         cpu_temps = []
         for path in hwmons.get("coretemp", []):
             t = os.path.join(path, "temp1_input")
             if os.path.isfile(t):
-                cpu_temps.append(read_temp_c(t))
-
-        hdd_temps = []
-        for path in hwmons.get("drivetemp", []):
-            t = os.path.join(path, "temp1_input")
-            if os.path.isfile(t):
-                hdd_temps.append(read_temp_c(t))
+                val = read_sensor_temp(t)
+                if val is not None:
+                    cpu_temps.append(val)
 
         nvme_temps = []
         for path in hwmons.get("nvme", []):
             t = os.path.join(path, "temp1_input")
             if os.path.isfile(t):
-                nvme_temps.append(read_temp_c(t))
+                val = read_sensor_temp(t)
+                if val is not None:
+                    nvme_temps.append(val)
 
         return (
             max(cpu_temps) if cpu_temps else None,
-            max(hdd_temps) if hdd_temps else None,
             max(nvme_temps) if nvme_temps else None,
         )
+
+
+    def get_hdd_temp(hwmons):
+        hdd_temps = []
+        for path in hwmons.get("drivetemp", []):
+            dev = drivetemp_block_dev(path)
+            if dev and is_disk_standby(dev):
+                continue
+            t = os.path.join(path, "temp1_input")
+            if os.path.isfile(t):
+                val = read_sensor_temp(t)
+                if val is not None:
+                    hdd_temps.append(val)
+        return max(hdd_temps) if hdd_temps else None
 
 
     def restore_auto(it86_path):
@@ -175,6 +219,8 @@ let
         cur_pwm2 = None
         cur_pwm3 = None
         last_logged = (None, None)
+        hdd_t = None
+        last_hdd_check = -HDD_POLL_INTERVAL
 
         try:
             write_text(pwm2_enable, 1)
@@ -182,8 +228,12 @@ let
 
             while running:
                 try:
+                    now = time.monotonic()
                     hwmons = find_hwmons()
-                    cpu_t, hdd_t, nvme_t = get_temperatures(hwmons)
+                    cpu_t, nvme_t = get_core_and_nvme_temps(hwmons)
+                    if now - last_hdd_check >= HDD_POLL_INTERVAL:
+                        hdd_t = get_hdd_temp(hwmons)
+                        last_hdd_check = now
 
                     target_pwm2 = interpolate(cpu_t, CPU_FAN_CURVE) if cpu_t is not None else FALLBACK_PWM
 
@@ -209,8 +259,11 @@ let
                     ):
                         rpm2 = read_text(fan2_file) if os.path.isfile(fan2_file) else "?"
                         rpm3 = read_text(fan3_file) if os.path.isfile(fan3_file) else "?"
+                        cpu_str = f"{cpu_t:.1f}C" if cpu_t is not None else "?"
+                        hdd_str = f"{hdd_t:.1f}C" if hdd_t is not None else "standby"
+                        nvme_str = f"{nvme_t:.1f}C" if nvme_t is not None else "?"
                         print(
-                            f"temps(CPU={cpu_t}C HDD={hdd_t}C NVMe={nvme_t}C) -> "
+                            f"temps(CPU={cpu_str} HDD={hdd_str} NVMe={nvme_str}) -> "
                             f"pwm2={cur_pwm2} ({rpm2} RPM), pwm3={cur_pwm3} ({rpm3} RPM)",
                             flush=True,
                         )
