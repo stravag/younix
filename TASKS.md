@@ -30,56 +30,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ---
 
-## Completed
-
-### T-001 — Bootstrap instructions & key commands in README
-- **Status**: `done`
-- **Artifacts**: `README.md`
-- **Summary**: Documented USB creation, BIOS watchdog disable, 1 TB NVMe partitioning (preserving factory 128 GB UGOS SSD), `nixos-install` from GitHub flake, and daily `comin` commands.
-
-### T-002 — Pull-based GitOps with `comin`
-- **Status**: `done`
-- **Artifacts**: `modules/gitops.nix`
-- **Summary**: Enabled `services.comin` polling `https://github.com/stravag/younix.git` (`main` branch, with `testing-younix` support for safe test deployments).
-
-### T-003 — Thermal & fan control
-- **Status**: `done`
-- **Artifacts**: `modules/thermals.nix`
-- **Summary**: Built out-of-tree `it87` driver (IT8613E) + `drivetemp`, enabled `thermald` and `powersave` governor, and deployed `younix-fancontrol` daemon with fail-safe restore to hardware auto mode.
-
-### T-004 — UGREEN front-panel LED controller
-- **Status**: `done`
-- **Artifacts**: `modules/leds.nix`
-- **Summary**: Built out-of-tree `led-ugreen` kernel module (I2C @ `0x3a`) and `younix-leds` daemon controlling power, LAN (`netdev`), and bay 1–4 disk LEDs (activity blinking + standby-safe SMART fault indicator).
-
-### T-005 — Sync `README.md` with current repo state
-- **Status**: `done`
-- **Artifacts**: `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
-- **Summary**: Updated layout with `thermals.nix`, `leds.nix`, `storage.nix`, and `TASKS.md`, corrected `comin` polling interval to 1 hour, and split documentation into a concise `README.md`, one-time `docs/bootstrap.md`, and day-to-day/recovery `docs/runbook.md`.
-
-### T-006 — Secrets management with `sops-nix`
-- **Status**: `done`
-- **Artifacts**: `.sops.yaml`, `flake.nix`, `flake.lock`, `modules/secrets.nix`, `secrets/secrets.yaml`, `docs/bootstrap.md`, `docs/runbook.md`, `README.md`
-- **Summary**: Enabled `sops-nix` using a dedicated host `age` key at `/etc/keys/sops.key` (backed up alongside `/etc/keys/hdd.key`) plus a macOS admin `age` key (`~/Library/Application Support/sops/age/keys.txt`). Verified end-to-end encryption on macOS and tmpfs decryption to `/run/secrets/test_secret` on `younix`.
-
-### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
-- **Status**: `done`
-- **Artifacts**: `modules/storage.nix`, `flake.nix`, `docs/bootstrap.md`, `docs/runbook.md`
-- **Summary**: Deployed **LUKS2 + MergerFS + SnapRAID** (`LUKS-PARITY1`/`PARITY1` at `/mnt/parity1` + `LUKS-DATA1`/`DATA1` at `/mnt/disk1`, unattended Stage 2 unlock via `/etc/crypttab` + `/etc/keys/hdd.key`, MergerFS pool at `/mnt/data`, nightly `snapraid sync` with mount + >100-deletion `snapraid-precheck` guard, and weekly `snapraid scrub`). Verified across reboot.
-
----
-
 ## Phase 1 — Foundation (Secrets & Storage)
-
-### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
-- **Status**: `in-progress`
-- **Depends on**: `T-007`
-- **Goal**: Proactively detect failing drives and optionally spin down idle HDDs without conflicting with LED or fan daemons.
-- **Scope**:
-  - Enable `services.smartd` in `modules/storage.nix` with scheduled short (weekly) and long (monthly) self-tests, configured with `-n standby` so sleeping drives aren't woken unnecessarily.
-  - Evaluate and optionally enable `hd-idle` for HDD spindown; verify `modules/thermals.nix` (`drivetemp`) and `modules/leds.nix` (`smartctl -n standby`) do not spin drives back up.
-- **Verification**:
-  - `systemctl status smartd`, `smartctl -i /dev/sdX`, confirm `younix-fancontrol` and `younix-leds` logs remain error-free.
 
 ### T-009 — Expand HDD array with 2nd pair of 4 TB drives (post-migration)
 - **Status**: `ready`
@@ -225,3 +176,47 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - Add `.github/workflows/check.yml` running `nix flake check` and `nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link` on pushes and PRs.
 - **Verification**:
   - Push workflow and verify green run in GitHub Actions.
+
+---
+
+## Completed
+
+### T-001 — Bootstrap instructions & key commands in README
+- **Status**: `done`
+- **Artifacts**: `README.md`
+- **Summary**: Documented USB creation, BIOS watchdog disable, 1 TB NVMe partitioning (preserving factory 128 GB UGOS SSD), `nixos-install` from GitHub flake, and daily `comin` commands.
+
+### T-002 — Pull-based GitOps with `comin`
+- **Status**: `done`
+- **Artifacts**: `modules/gitops.nix`
+- **Summary**: Enabled `services.comin` polling `https://github.com/stravag/younix.git` (`main` branch, with `testing-younix` support for safe test deployments).
+
+### T-003 — Thermal & fan control
+- **Status**: `done`
+- **Artifacts**: `modules/thermals.nix`
+- **Summary**: Built out-of-tree `it87` driver (IT8613E) + `drivetemp`, enabled `thermald` and `powersave` governor, and deployed `younix-fancontrol` daemon with fail-safe restore to hardware auto mode.
+
+### T-004 — UGREEN front-panel LED controller
+- **Status**: `done`
+- **Artifacts**: `modules/leds.nix`
+- **Summary**: Built out-of-tree `led-ugreen` kernel module (I2C @ `0x3a`) and `younix-leds` daemon controlling power, LAN (`netdev`), and bay 1–4 disk LEDs (activity blinking + standby-safe SMART fault indicator).
+
+### T-005 — Sync `README.md` with current repo state
+- **Status**: `done`
+- **Artifacts**: `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
+- **Summary**: Updated layout with `thermals.nix`, `leds.nix`, `storage.nix`, and `TASKS.md`, corrected `comin` polling interval to 1 hour, and split documentation into a concise `README.md`, one-time `docs/bootstrap.md`, and day-to-day/recovery `docs/runbook.md`.
+
+### T-006 — Secrets management with `sops-nix`
+- **Status**: `done`
+- **Artifacts**: `.sops.yaml`, `flake.nix`, `flake.lock`, `modules/secrets.nix`, `secrets/secrets.yaml`, `docs/bootstrap.md`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled `sops-nix` using a dedicated host `age` key at `/etc/keys/sops.key` (backed up alongside `/etc/keys/hdd.key`) plus a macOS admin `age` key (`~/Library/Application Support/sops/age/keys.txt`). Verified end-to-end encryption on macOS and tmpfs decryption to `/run/secrets/test_secret` on `younix`.
+
+### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
+- **Status**: `done`
+- **Artifacts**: `modules/storage.nix`, `flake.nix`, `docs/bootstrap.md`, `docs/runbook.md`
+- **Summary**: Deployed **LUKS2 + MergerFS + SnapRAID** (`LUKS-PARITY1`/`PARITY1` at `/mnt/parity1` + `LUKS-DATA1`/`DATA1` at `/mnt/disk1`, unattended Stage 2 unlock via `/etc/crypttab` + `/etc/keys/hdd.key`, MergerFS pool at `/mnt/data`, nightly `snapraid sync` with mount + >100-deletion `snapraid-precheck` guard, and weekly `snapraid scrub`). Verified across reboot.
+
+### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
+- **Status**: `done`
+- **Artifacts**: `modules/storage.nix`, `modules/thermals.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled `services.smartd` (`DEVICESCAN` covering both SATA HDDs and NVMe SSDs, `-n standby,q`, weekly Short self-tests Sat `04:xx`, monthly Long self-tests 1st `04:xx` aligned with the `04:00` SnapRAID window), deployed `hd-idle` (`1800s` ATA spindown scoped dynamically to `allDisks` via `PARTLABEL`), and hardened `younix-fancontrol` (`hdparm -C` standby check + 30 s HDD poll interval + per-sensor `OSError` handling) so `drivetemp` never wakes sleeping HDDs. Verified all 4 services (`smartd`, `hd-idle`, `younix-fancontrol`, `younix-leds`) and confirmed `/dev/sda` remains in standby across poll cycles with zero log errors.
