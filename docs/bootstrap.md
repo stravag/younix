@@ -224,7 +224,7 @@ sudo systemctl start mnt-parity1.mount mnt-disk1.mount mnt-data.mount
 
 # Verify everything is unlocked and mounted
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
-findmnt /mnt/parity1 /mnt/disk1 /mnt/data
+findmnt -R /mnt
 df -h /mnt/parity1 /mnt/disk1 /mnt/data
 ```
 

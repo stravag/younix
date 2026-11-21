@@ -32,7 +32,7 @@ comin status
 sudo comin fetch
 
 # Quick storage check
-findmnt /mnt/parity1 /mnt/disk1 /mnt/data
+findmnt -R /mnt
 df -h /mnt/parity1 /mnt/disk1 /mnt/data
 sudo snapraid status
 ```

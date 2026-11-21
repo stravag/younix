@@ -52,18 +52,15 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Artifacts**: `modules/leds.nix`
 - **Summary**: Built out-of-tree `led-ugreen` kernel module (I2C @ `0x3a`) and `younix-leds` daemon controlling power, LAN (`netdev`), and bay 1–4 disk LEDs (activity blinking + standby-safe SMART fault indicator).
 
----
-
-## Phase 0 — Housekeeping
-
 ### T-005 — Sync `README.md` with current repo state
-- **Status**: `ready`
-- **Depends on**: none
-- **Goal**: Fix minor doc drift in `README.md`.
-- **Scope**:
-  - Add `modules/thermals.nix`, `modules/leds.nix`, and `TASKS.md` to the Layout section.
-  - Update the `comin` polling note (currently says `~60 seconds`, while `modules/gitops.nix` is set to `3600` seconds / 1 hour).
-- **Verification**: Review `README.md` against `flake.nix` and `modules/gitops.nix`.
+- **Status**: `done`
+- **Artifacts**: `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
+- **Summary**: Updated layout with `thermals.nix`, `leds.nix`, `storage.nix`, and `TASKS.md`, corrected `comin` polling interval to 1 hour, and split documentation into a concise `README.md`, one-time `docs/bootstrap.md`, and day-to-day/recovery `docs/runbook.md`.
+
+### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
+- **Status**: `done`
+- **Artifacts**: `modules/storage.nix`, `flake.nix`, `docs/bootstrap.md`, `docs/runbook.md`
+- **Summary**: Deployed **LUKS2 + MergerFS + SnapRAID** (`LUKS-PARITY1`/`PARITY1` at `/mnt/parity1` + `LUKS-DATA1`/`DATA1` at `/mnt/disk1`, unattended Stage 2 unlock via `/etc/crypttab` + `/etc/keys/hdd.key`, MergerFS pool at `/mnt/data`, nightly `snapraid sync` with mount + >100-deletion `snapraid-precheck` guard, and weekly `snapraid scrub`). Verified across reboot.
 
 ---
 
@@ -76,29 +73,14 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Scope**:
   - Add `sops-nix` input to `flake.nix` and create `modules/secrets.nix`.
   - Configure `.sops.yaml` using `younix`'s SSH host ed25519 key (converted to age via `ssh-to-age`) plus a local admin age key on macOS so secrets can be edited from the Mac.
-  - Document the workflow for creating/editing encrypted secrets in `README.md`.
+  - Document the workflow for creating/editing encrypted secrets in `docs/runbook.md`.
 - **Manual steps**:
   - Fetch `younix`'s public SSH host key (`ssh-keyscan` / `/etc/ssh/ssh_host_ed25519_key.pub`) and generate/back up a personal `age` key on macOS.
 - **Verification**:
   - Add a harmless test secret or verify `sops` decryption on `younix` under `/run/secrets/`.
 
-### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
-- **Status**: `in-progress`
-- **Depends on**: none
-- **Decision**: **LUKS2 + MergerFS + SnapRAID** (unencrypted 1 TB NVMe holding `/etc/keys/hdd.key` for unattended Stage 2 LUKS2 unlock via `/etc/crypttab` + `PARTLABEL`; `ext4` drives `LUKS-PARITY1`/`PARITY1` at `/mnt/parity1` + `LUKS-DATA1`/`DATA1` at `/mnt/disk1`, pooled via MergerFS at `/mnt/data`, nightly `snapraid sync` with mount + delete-threshold precheck, weekly `snapraid scrub`).
-- **Artifacts**: `modules/storage.nix`, `flake.nix`, `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
-- **Scope**:
-  - [x] Create `modules/storage.nix` declaring `/etc/crypttab` (`nofail`), `/mnt/parity1`, `/mnt/disk1`, MergerFS pool `/mnt/data`, and `services.snapraid` (nightly sync + precheck guard + weekly scrub).
-  - [x] Split `README.md` into `docs/bootstrap.md` (one-time OS + LUKS2/MergerFS/SnapRAID setup) and `docs/runbook.md` (day-to-day ops, keyfile recovery, and drive failure/replacement runbook).
-- **Manual steps**:
-  - [ ] Generate & back up `/etc/keys/hdd.key`, partition/LUKS2-encrypt/format the initial 2x 4 TB HDDs (`LUKS-PARITY1`/`PARITY1`, `LUKS-DATA1`/`DATA1`), and lock empty mountpoints with `chattr +i`.
-  - [ ] Deploy on `testing-younix`, unlock & mount, create `/mnt/data/{photos,documents,media,backups,share}`, and run initial `sudo snapraid sync`.
-  - [ ] Merge to `main` and verify unattended LUKS unlock + mounts survive a reboot cleanly.
-- **Verification**:
-  - `lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT`, `findmnt /mnt/parity1 /mnt/disk1 /mnt/data`, `df -h /mnt/data /mnt/disk1 /mnt/parity1`, `sudo snapraid status`, `sudo systemctl start snapraid-sync`, reboot test.
-
 ### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-007`
 - **Goal**: Proactively detect failing drives and optionally spin down idle HDDs without conflicting with LED or fan daemons.
 - **Scope**:
@@ -108,16 +90,16 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - `systemctl status smartd`, `smartctl -i /dev/sdX`, confirm `younix-fancontrol` and `younix-leds` logs remain error-free.
 
 ### T-009 — Expand HDD array with 2nd pair of 4 TB drives (post-migration)
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-007`
-- **Goal**: After migrating data from the old NAS, install the remaining 2x 4 TB drives and grow the pool online.
+- **Goal**: After migrating data from the old NAS, install the remaining 2x 4 TB drives and grow the MergerFS + SnapRAID pool to 12 TB usable (1 parity + 3 data).
 - **Scope**:
-  - Document the exact expansion procedure in `README.md` (e.g., `btrfs device add` + `btrfs balance start -dconvert=raid1 -mconvert=raid1c3` or `raid1`, or SnapRAID/MergerFS addition).
-  - Update `modules/storage.nix` if any new device references are needed.
+  - Document the exact expansion procedure in `docs/runbook.md` (partition `LUKS-DATA2`/`LUKS-DATA3`, LUKS2 format with `/etc/keys/hdd.key`, `mkfs.ext4 -m 1 -L DATA2/DATA3`, `chattr +i` mountpoints, append `d2`/`d3` to `dataDisks` in `modules/storage.nix`, run `snapraid sync`, optionally `mergerfs.balance`).
+  - Update `dataDisks` in `modules/storage.nix` when the drives are installed.
 - **Manual steps**:
-  - Copy data from old NAS to `younix`, physically install bays 3 & 4, and run the online expansion.
+  - Copy data from old NAS to `younix`, physically install bays 3 & 4, and run the expansion.
 - **Verification**:
-  - Confirm bays 1–4 LEDs are all active white (`younix-leds`), `df -h /mnt/data` shows expanded space, and scrub passes with 0 errors.
+  - Confirm bays 1–4 LEDs are all active white (`younix-leds`), `df -h /mnt/data` shows ~11 TB / 12 TB usable space, and `snapraid status` + scrub pass with 0 errors.
 
 ---
 
@@ -212,15 +194,15 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 4 — Backups, Observability & CI
 
-### T-017 — Local snapshots & database dumps
-- **Status**: `blocked`
+### T-017 — Local database dumps & versioned snapshots
+- **Status**: `ready`
 - **Depends on**: `T-007`
-- **Goal**: Protect against accidental deletion or bad app updates with automated local snapshots and consistent DB dumps.
+- **Goal**: Protect against accidental deletion or bad app updates with automated consistent DB dumps (scheduled ahead of nightly `snapraid sync`) and optional local versioned backups.
 - **Scope**:
-  - Configure automated local snapshots (e.g., `services.snapper` or `btrbk` if Btrfs) for `photos` and `documents` with sensible retention (hourly/daily/weekly).
-  - Configure `services.postgresqlBackup` (dumping Immich & Paperless databases nightly to a backup folder on `/mnt/data/backups/postgres`).
+  - Configure `services.postgresqlBackup` (dumping Immich & Paperless databases nightly—e.g., `03:00`, before the `04:00` SnapRAID sync—to `/mnt/data/backups/postgres`).
+  - Optionally configure a local versioned backup (e.g., local `restic` repo or `rsync --link-dest`) for `photos` and `documents` if fast local point-in-time recovery beyond SnapRAID + offsite `restic` (`T-018`) is desired.
 - **Verification**:
-  - Run backup/snapshot timers manually; verify snapshots and SQL dumps exist and are non-empty.
+  - Run backup timers manually; verify SQL dumps exist under `/mnt/data/backups/postgres` and are non-empty.
 
 ### T-018 — Automated offsite backups (`restic`)
 - **Status**: `needs-decision`

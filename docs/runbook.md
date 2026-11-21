@@ -34,7 +34,7 @@ journalctl -u comin -f
 ```bash
 # Inspect LUKS mappers, filesystems, and mounts
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
-findmnt /mnt/parity1 /mnt/disk1 /mnt/data
+findmnt -R /mnt
 df -h /mnt/parity1 /mnt/disk1 /mnt/data
 
 # Inspect SnapRAID parity status & pending changes
