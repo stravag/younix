@@ -63,13 +63,46 @@ systemctl list-timers 'snapraid*'
 
 ---
 
-## 3. LUKS Keyfile Recovery (If the 1 TB NVMe Is Reinstalled)
+## 3. Secrets Management (`sops-nix`)
 
-The HDDs are encrypted with `/etc/keys/hdd.key` (backed up as base64 in your password manager during [bootstrap](bootstrap.md#1-generate-and-back-up-the-hdd-encryption-keyfile)). If you ever reinstall NixOS on a replacement NVMe SSD, restore the keyfile **before** unlocking/mounting the HDDs:
+Encrypted secrets live in `secrets/secrets.yaml` and are encrypted with `age` for two recipients listed in `.sops.yaml`:
+- Your macOS admin key (`~/Library/Application Support/sops/age/keys.txt`) — used to view and edit secrets locally.
+- `younix`'s host key (`/etc/keys/sops.key`) — used by `sops-nix` to decrypt secrets into in-memory `/run/secrets/<name>` at boot/activation.
+
+### Day-to-Day: Adding or Editing Secrets (on macOS)
+
+```bash
+# Edit secrets/secrets.yaml in $EDITOR (decrypts locally, re-encrypts on save)
+sops secrets/secrets.yaml
+
+# Optional: inspect decrypted contents in your terminal without editing
+sops --decrypt secrets/secrets.yaml
+```
+
+To expose a secret to a NixOS service:
+1. Add the key/value inside `sops secrets/secrets.yaml`.
+2. Declare it in the relevant module (e.g., `sops.secrets.<name> = { owner = "..."; };`) and point the service's `*File` / `environmentFile` option at `config.sops.secrets.<name>.path`.
+3. Commit and push; verify on `younix` with `sudo ls -la /run/secrets/`.
+
+### Re-keying After Rotating Keys
+
+If you ever add or replace a public key in `.sops.yaml`, re-encrypt existing secret files from your Mac:
+
+```bash
+sops updatekeys secrets/secrets.yaml
+```
+
+---
+
+## 4. Keyfile Recovery (If the 1 TB NVMe Is Reinstalled)
+
+Both `/etc/keys/hdd.key` (LUKS2 HDD encryption) and `/etc/keys/sops.key` (`sops-nix` decryption) live on the 1 TB NVMe SSD and are backed up in your password manager. If you ever reinstall NixOS on a replacement NVMe SSD, restore both keyfiles from your password manager:
+
+### Restore `/etc/keys/hdd.key` (before unlocking/mounting HDDs)
 
 ```bash
 sudo install -d -m 0700 /etc/keys
-echo '<BASE64_KEY_FROM_PASSWORD_MANAGER>' | base64 -d | sudo tee /etc/keys/hdd.key > /dev/null
+echo '<BASE64_HDD_KEY_FROM_PASSWORD_MANAGER>' | base64 -d | sudo tee /etc/keys/hdd.key > /dev/null
 sudo chmod 0400 /etc/keys/hdd.key
 
 # Verify size is exactly 4096 bytes, then unlock & mount
@@ -78,9 +111,24 @@ sudo systemctl start systemd-cryptsetup@crypt_parity1 systemd-cryptsetup@crypt_d
 sudo systemctl start mnt-parity1.mount mnt-disk1.mount mnt-data.mount
 ```
 
+### Restore `/etc/keys/sops.key` (for `/run/secrets/*` decryption)
+
+```bash
+sudo install -d -m 0700 /etc/keys
+sudo install -m 0600 /dev/null /etc/keys/sops.key
+sudo tee /etc/keys/sops.key > /dev/null <<'EOF'
+<PASTE_FULL_SOPS_AGE_KEY_FROM_PASSWORD_MANAGER>
+EOF
+sudo chmod 0400 /etc/keys/sops.key
+
+# Re-activate secrets (or reboot)
+sudo /run/current-system/activate
+sudo ls -la /run/secrets/
+```
+
 ---
 
-## 4. Drive Failure & Recovery Runbook
+## 5. Drive Failure & Recovery Runbook
 
 ### Step 0 — Identify the Failed Drive
 

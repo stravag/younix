@@ -1,0 +1,10 @@
+keys:
+  - &admin_mac age1szke95ssnzjzl4cuq7d8jftd9ql4g6wyrlsplh9t7p73yx5elg7q32pyu0
+  - &younix age1jgt8ynefwfhxjss0qqzazmawvfcg5dz3nz0457kfucy4pzwasegqf42emn
+
+creation_rules:
+  - path_regex: ^secrets/.*\.(yaml|json|env|ini)$
+    key_groups:
+      - age:
+          - *admin_mac
+          - *younix

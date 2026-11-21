@@ -67,17 +67,17 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 1 — Foundation (Secrets & Storage)
 
 ### T-006 — Secrets management with `sops-nix`
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: none
 - **Goal**: Enable encrypted declarative secrets so credentials (Samba, Paperless, backups, alerts) can be safely stored in this public repo.
 - **Scope**:
   - Add `sops-nix` input to `flake.nix` and create `modules/secrets.nix`.
-  - Configure `.sops.yaml` using `younix`'s SSH host ed25519 key (converted to age via `ssh-to-age`) plus a local admin age key on macOS so secrets can be edited from the Mac.
-  - Document the workflow for creating/editing encrypted secrets in `docs/runbook.md`.
+  - Configure `.sops.yaml` using `younix`'s dedicated host `age` key (`/etc/keys/sops.key`, backed up alongside `/etc/keys/hdd.key`) plus a local admin `age` key on macOS so secrets can be edited from the Mac.
+  - Document the workflow for creating/editing encrypted secrets and restoring `/etc/keys/sops.key` in `docs/runbook.md` and `docs/bootstrap.md`.
 - **Manual steps**:
-  - Fetch `younix`'s public SSH host key (`ssh-keyscan` / `/etc/ssh/ssh_host_ed25519_key.pub`) and generate/back up a personal `age` key on macOS.
+  - Generate and back up the macOS admin `age` key (`~/Library/Application Support/sops/age/keys.txt`) and `younix`'s host key (`/etc/keys/sops.key`).
 - **Verification**:
-  - Add a harmless test secret or verify `sops` decryption on `younix` under `/run/secrets/`.
+  - Add a harmless test secret (`test_secret`) and verify `sops` decryption on `younix` under `/run/secrets/test_secret`.
 
 ### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
 - **Status**: `ready`

@@ -3,6 +3,7 @@
 One-time instructions for setting up `younix` (UGREEN NASync DXP4800 Plus) from scratch:
 1. **Part 1:** Installing NixOS onto the **1 TB M.2 NVMe SSD** (leaving the factory **128 GB UGOS Pro SSD** untouched).
 2. **Part 2:** Initializing the **LUKS2 + MergerFS + SnapRAID** HDD storage array (starting with 2× 4 TB SATA drives).
+3. **Part 3:** Provisioning `/etc/keys/sops.key` for **`sops-nix`** encrypted secrets.
 
 For day-to-day administration and drive replacement procedures, see the [Operations & Recovery Runbook](runbook.md).
 
@@ -241,3 +242,22 @@ journalctl -u snapraid-precheck -u snapraid-sync -n 30
 ```
 
 Once everything checks out, merge `testing-younix` into `main`, run `sudo comin fetch`, and `sudo reboot` once to verify unattended LUKS unlock and mounting on boot.
+
+---
+
+## Part 3 — Provision `sops-nix` Decryption Key (`/etc/keys/sops.key`)
+
+Encrypted secrets in `secrets/secrets.yaml` are decrypted at boot/activation using a dedicated `age` private key stored at `/etc/keys/sops.key` alongside `/etc/keys/hdd.key`.
+
+- **Reinstalling on a replacement NVMe SSD?** Restore your backed-up `/etc/keys/sops.key` from your password manager—see [Keyfile Recovery](runbook.md#4-keyfile-recovery-if-the-1-tb-nvme-is-reinstalled) (no Git changes needed).
+- **Bootstrapping brand-new keys from scratch:**
+  1. On macOS, install `sops` and `age` (`brew install sops age`) and generate an admin key at `~/Library/Application Support/sops/age/keys.txt` (`age-keygen -o "$HOME/Library/Application Support/sops/age/keys.txt"`). Back it up in your password manager.
+  2. On `younix`, generate the host key and back it up in your password manager:
+     ```bash
+     sudo install -d -m 0700 /etc/keys
+     sudo install -m 0600 /dev/null /etc/keys/sops.key
+     nix shell nixpkgs#age -c sh -c 'age-keygen | sudo tee /etc/keys/sops.key > /dev/null'
+     sudo chmod 0400 /etc/keys/sops.key
+     sudo cat /etc/keys/sops.key   # copy into password manager
+     ```
+  3. Put both public `age1...` keys in `.sops.yaml` and run `sops updatekeys secrets/secrets.yaml` on macOS.
