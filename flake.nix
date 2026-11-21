@@ -21,6 +21,7 @@
           ./modules/gitops.nix
           ./modules/thermals.nix
           ./modules/leds.nix
+          ./modules/storage.nix
         ];
       };
     };
