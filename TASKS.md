@@ -83,19 +83,19 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - Add a harmless test secret or verify `sops` decryption on `younix` under `/run/secrets/`.
 
 ### T-007 — HDD storage array setup (initial 2x 4 TB, single-disk expandable)
-- **Status**: `needs-decision`
+- **Status**: `in-progress`
 - **Depends on**: none
-- **Open decision**: Choose the array technology for the 4 SATA bays:
-  1. **Recommended — Btrfs RAID1**: Start with 2x 4 TB (4 TB usable), add 2x 4 TB online later (8 TB usable), and replace *individual* disks with larger ones later with immediate capacity gain (as long as no single disk exceeds the sum of the others). Native Linux kernel, CoW snapshots, checksums, `zstd` compression. Trade-off: 50% usable capacity.
-  2. **Alternative — MergerFS + SnapRAID**: Start with 1 data + 1 parity (4 TB usable), add 2x 4 TB data disks later (12 TB usable, 75% efficiency). Single-disk upgrades work once the parity disk is at least as large as the biggest data disk. Trade-off: parity is scheduled (not real-time) and no native CoW snapshots.
+- **Decision**: **LUKS2 + MergerFS + SnapRAID** (unencrypted 1 TB NVMe holding `/etc/keys/hdd.key` for unattended Stage 2 LUKS2 unlock via `/etc/crypttab` + `PARTLABEL`; `ext4` drives `LUKS-PARITY1`/`PARITY1` at `/mnt/parity1` + `LUKS-DATA1`/`DATA1` at `/mnt/disk1`, pooled via MergerFS at `/mnt/data`, nightly `snapraid sync` with mount + delete-threshold precheck, weekly `snapraid scrub`).
+- **Artifacts**: `modules/storage.nix`, `flake.nix`, `README.md`, `docs/bootstrap.md`, `docs/runbook.md`
 - **Scope**:
-  - Create `modules/storage.nix` declaring mount points (e.g., `/mnt/data` and subvolumes/dirs for `photos`, `documents`, `media`, `backups`, `share`), mount options (`noatime`, `compress=zstd`, `nofail` where appropriate), and filesystem maintenance (e.g. monthly `btrfs scrub`).
-  - Document the one-time disk creation & formatting commands (by `/dev/disk/by-id/...`) in `README.md`.
+  - [x] Create `modules/storage.nix` declaring `/etc/crypttab` (`nofail`), `/mnt/parity1`, `/mnt/disk1`, MergerFS pool `/mnt/data`, and `services.snapraid` (nightly sync + precheck guard + weekly scrub).
+  - [x] Split `README.md` into `docs/bootstrap.md` (one-time OS + LUKS2/MergerFS/SnapRAID setup) and `docs/runbook.md` (day-to-day ops, keyfile recovery, and drive failure/replacement runbook).
 - **Manual steps**:
-  - Wipe/format the initial 2x 4 TB HDDs on `younix` and create initial subvolumes/directories.
-  - Verify `hardware-configuration.nix` or `modules/storage.nix` mounts cleanly across reboot.
+  - [ ] Generate & back up `/etc/keys/hdd.key`, partition/LUKS2-encrypt/format the initial 2x 4 TB HDDs (`LUKS-PARITY1`/`PARITY1`, `LUKS-DATA1`/`DATA1`), and lock empty mountpoints with `chattr +i`.
+  - [ ] Deploy on `testing-younix`, unlock & mount, create `/mnt/data/{photos,documents,media,backups,share}`, and run initial `sudo snapraid sync`.
+  - [ ] Merge to `main` and verify unattended LUKS unlock + mounts survive a reboot cleanly.
 - **Verification**:
-  - `findmnt /mnt/data`, `btrfs filesystem usage /mnt/data` (if Btrfs), reboot test on `testing-younix` branch.
+  - `lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT`, `findmnt /mnt/parity1 /mnt/disk1 /mnt/data`, `df -h /mnt/data /mnt/disk1 /mnt/parity1`, `sudo snapraid status`, `sudo systemctl start snapraid-sync`, reboot test.
 
 ### T-008 — Disk health monitoring (`smartd`) & HDD power/acoustics
 - **Status**: `blocked`
