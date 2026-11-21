@@ -60,18 +60,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - `tailscale status`, SSH and ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
 
-### T-011 — Local file sharing via Samba (macOS-friendly)
-- **Status**: `in-progress`
-- **Depends on**: `T-006`, `T-007`
-- **Goal**: Mount NAS shares smoothly from macOS Finder, expose a Paperless `consume` drop folder, and optionally support Time Machine.
-- **Scope**:
-  - Create `modules/samba.nix` enabling `services.samba` + `services.samba-wsdd` (and Avahi SMB advertisement for macOS Finder discovery).
-  - Enable macOS `vfs objects = fruit streams_xattr` optimizations.
-  - Define initial shares (`media`, `photos`) with a declarative share list so additional shares (`share`, `paperless-inbox`, `timemachine`, etc.) can be added in a few lines later.
-  - Provision per-user Samba passwords declaratively via `sops-nix` (`samba_passwords.<user>` in `secrets/secrets.yaml`).
-- **Verification**:
-  - Add `samba_passwords.ranil` to `secrets/secrets.yaml`, deploy, connect from macOS (`smb://younix.local`), and test read/write speeds and permissions.
-
 ### T-012 — Reverse proxy & HTTPS with Caddy
 - **Status**: `blocked`
 - **Depends on**: `T-010`
@@ -220,3 +208,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/storage.nix`, `modules/thermals.nix`, `docs/runbook.md`, `README.md`
 - **Summary**: Enabled `services.smartd` (`DEVICESCAN` covering both SATA HDDs and NVMe SSDs, `-n standby,q`, weekly Short self-tests Sat `04:xx`, monthly Long self-tests 1st `04:xx` aligned with the `04:00` SnapRAID window), deployed `hd-idle` (`1800s` ATA spindown scoped dynamically to `allDisks` via `PARTLABEL`), and hardened `younix-fancontrol` (`hdparm -C` standby check + 30 s HDD poll interval + per-sensor `OSError` handling) so `drivetemp` never wakes sleeping HDDs. Verified all 4 services (`smartd`, `hd-idle`, `younix-fancontrol`, `younix-leds`) and confirmed `/dev/sda` remains in standby across poll cycles with zero log errors.
+
+### T-011 — Local file sharing via Samba (macOS-friendly)
+- **Status**: `done`
+- **Artifacts**: `modules/samba.nix`, `modules/secrets.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled authenticated SMB3-only `services.samba` (macOS `vfs_fruit` + `streams_xattr`, `dos filetimes = yes`, `nmbd` disabled), `services.samba-wsdd`, and Avahi `_smb._tcp` Bonjour discovery. Configured declarative `sambaUsers` & `sharedFolders` (`media`, `photos`, group-scoped `2770`/`0660`, ready for multi-user family access and per-user `personalShare` folders) with per-user `sops-nix` password sync (`samba_passwords/<user>` via `younix-samba-passwd.service`) and mount-safe directory provisioning (`younix-samba-dirs.service`). Verified live services and macOS Finder read/write access.
