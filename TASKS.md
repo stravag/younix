@@ -46,36 +46,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ---
 
-## Phase 2 — Access & Networking
-
-### T-010 — Remote access via Tailscale (zero port-forwarding)
-- **Status**: `in-progress`
-- **Depends on**: none
-- **Goal**: Access `younix` and its web services securely from anywhere without opening router ports.
-- **Scope**:
-  - [x] Create `modules/remote-access.nix` enabling `services.tailscale` with `openFirewall = true`, `useRoutingFeatures = "none"`, `checkReversePath = "loose"`, and strict per-port `tailscale0` firewall isolation (`younix-tailscale-in` chain allowing only allowlisted `tailscale0` ports — TCP `22` here, keeping Samba/WSDD/Avahi LAN-only).
-  - [x] Register `modules/remote-access.nix` in `flake.nix` and document enrollment & hardening in `docs/runbook.md` and `README.md`.
-- **Manual steps**:
-  - [ ] Deploy on `testing-younix` (then merge to `main`), run `sudo tailscale up --ssh=false --accept-routes=false --accept-dns=false`, and configure Tailscale admin hardening (Device Approval, disable key expiry on `younix` only, least-privilege ACLs, no Funnel).
-- **Verification**:
-  - [ ] `tailscale status`, `sudo iptables -L younix-tailscale-in -n -v`, and SSH/ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
-
-### T-012 — Reverse proxy & HTTPS with Caddy
-- **Status**: `in-progress`
-- **Depends on**: `T-010`
-- **Goal**: Serve Jellyfin, Immich, and Paperless over HTTPS on clean URLs without remembering ports or exposing services publicly.
-- **Decision (resolved)**:
-  - **Custom domain via Metanet → deSEC subdomain delegation + Caddy wildcard DNS-01 cert**: Delegate a dedicated subdomain (`home.<domain>`) from Metanet to free EU DNS provider [deSEC](https://desec.io) via 2 `NS` records, point `*.home.<domain>` to `younix`'s private Tailscale IP, and use a deSEC API token. Keep both the base domain and token encrypted in `secrets/secrets.yaml` (`sops-nix`, injected via Caddy `{$YOUNIX_DOMAIN}` / `{$DESEC_TOKEN}`), and restrict Caddy port `443` strictly to `tailscale0`.
-- **Scope**:
-  - [x] Create `modules/proxy.nix` configuring `services.caddy` with `pkgs.caddy.withPlugins` (`github.com/caddy-dns/desec@v1.1.0`), `sops.templates."caddy.env"`, wildcard TLS (`*.{$YOUNIX_DOMAIN:example.invalid}`) with `resolvers 1.1.1.1 9.9.9.9`, declarative `younix.proxy.routes` option, built-in `health` endpoint, and `networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 443 ]`.
-  - [x] Register `modules/proxy.nix` in `flake.nix` and document operations/diagnostics in `docs/runbook.md` and `README.md`.
-- **Verification**:
-  - [ ] Deploy on `testing-younix` (then merge to `main`), verify `systemctl status caddy` + `journalctl -u caddy -n 50` shows wildcard cert issued cleanly.
-  - [ ] `curl -i https://health.<domain>` over Tailscale returns `200` (`younix proxy ok`) with valid Let's Encrypt wildcard cert and no warnings.
-  - [ ] Confirm `sudo iptables -L younix-tailscale-in -n -v` shows TCP `22` and `443` only, and port `443` is unreachable from LAN IP (`younix.local`).
-
----
-
 ## Phase 3 — Self-Hosted Services
 
 ### T-013 — Intel QuickSync hardware acceleration
@@ -112,7 +82,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - Upload photos/videos via web UI and Immich mobile app (both LAN and over Tailscale); verify thumbnails generate and originals land on `/mnt/data/photos`.
 
 ### T-016 — Paperless-ngx document management
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`
 - **Goal**: Deploy Paperless-ngx natively with OCR, HDD document storage, and a Samba-accessible `consume` inbox folder.
 - **Scope**:
@@ -215,3 +185,13 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/samba.nix`, `modules/secrets.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
 - **Summary**: Enabled authenticated SMB3-only `services.samba` (macOS `vfs_fruit` + `streams_xattr`, `dos filetimes = yes`, `nmbd` disabled), `services.samba-wsdd`, and Avahi `_smb._tcp` Bonjour discovery. Configured declarative `sambaUsers` & `sharedFolders` (`media`, `photos`, group-scoped `2770`/`0660`, ready for multi-user family access and per-user `personalShare` folders) with per-user `sops-nix` password sync (`samba_passwords/<user>` via `younix-samba-passwd.service`) and mount-safe directory provisioning (`younix-samba-dirs.service`). Verified live services and macOS Finder read/write access.
+
+### T-010 — Remote access via Tailscale (zero port-forwarding)
+- **Status**: `done`
+- **Artifacts**: `modules/remote-access.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled `services.tailscale` (`openFirewall = true` for local WireGuard NAT traversal with zero router port-forwarding, `useRoutingFeatures = "none"`, `checkReversePath = "loose"`). Enrolled interactively with `--ssh=false --accept-routes=false --accept-dns=false` (no auth keys in git) and enforced strict per-port `tailscale0` firewall isolation via `younix-tailscale-in` (`iptables`/`ip6tables`), allowing only explicitly allowlisted `tailscale0` ports (`22` + `443`) + ping while keeping Samba/WSDD/Avahi LAN-only.
+
+### T-012 — Reverse proxy & HTTPS with Caddy
+- **Status**: `done`
+- **Artifacts**: `modules/proxy.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed `services.caddy` built with `github.com/caddy-dns/desec@v1.1.0` and wildcard DNS-01 TLS (`propagation_delay 60s`, `propagation_timeout 5m`, `resolvers 1.1.1.1 9.9.9.9`) using a dedicated delegated subdomain (`NS` → deSEC) pointing to `younix`'s private Tailscale IP. Both domain and deSEC API token are encrypted in `secrets/secrets.yaml` via `sops.templates."caddy.env"`. Added declarative `younix.proxy.routes`, security headers, built-in `health` endpoint, `abort` for unknown subdomains, and `tailscale0`-only TCP `443` access. Verified valid Let's Encrypt wildcard HTTPS over Tailscale and LAN port `443` isolation.

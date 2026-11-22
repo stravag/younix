@@ -112,7 +112,7 @@ in
           # Built-in health endpoint for verifying wildcard TLS & proxy routing
           @health host health.{$YOUNIX_DOMAIN:example.invalid}
           handle @health {
-            respond "younix proxy ok\n" 200
+            respond "younix proxy ok" 200
           }
 
           ${lib.concatStringsSep "\n" (lib.mapAttrsToList mkRouteBlock routes)}
