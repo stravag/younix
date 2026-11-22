@@ -61,15 +61,18 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - [ ] `tailscale status`, `sudo iptables -L younix-tailscale-in -n -v`, and SSH/ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
 
 ### T-012 — Reverse proxy & HTTPS with Caddy
-- **Status**: `blocked`
+- **Status**: `in-progress`
 - **Depends on**: `T-010`
 - **Goal**: Serve Jellyfin, Immich, and Paperless over HTTPS on clean URLs without remembering ports or exposing services publicly.
 - **Decision (resolved)**:
-  - **Custom domain via Metanet → deSEC subdomain delegation + Caddy wildcard DNS-01 cert**: Delegate a dedicated subdomain (e.g. `home.<domain>`) from Metanet to free EU DNS provider [deSEC](https://desec.io) via 2 `NS` records, point `*.home.<domain>` to `younix`'s private Tailscale IP, and use a scoped deSEC API token (`_acme-challenge` TXT only). Keep both the base domain and token encrypted in `secrets/secrets.yaml` (`sops-nix`, injected via Caddy `{$YOUNIX_DOMAIN}` / `{env.DESEC_TOKEN}`), and restrict Caddy port `443` strictly to `tailscale0`.
+  - **Custom domain via Metanet → deSEC subdomain delegation + Caddy wildcard DNS-01 cert**: Delegate a dedicated subdomain (`home.<domain>`) from Metanet to free EU DNS provider [deSEC](https://desec.io) via 2 `NS` records, point `*.home.<domain>` to `younix`'s private Tailscale IP, and use a deSEC API token. Keep both the base domain and token encrypted in `secrets/secrets.yaml` (`sops-nix`, injected via Caddy `{$YOUNIX_DOMAIN}` / `{$DESEC_TOKEN}`), and restrict Caddy port `443` strictly to `tailscale0`.
 - **Scope**:
-  - Create `modules/proxy.nix` configuring `services.caddy` with `pkgs.caddy.withPlugins` (`github.com/caddy-dns/desec`), `sops.templates` for Caddy's `environmentFile`, wildcard TLS (`*.{$YOUNIX_DOMAIN:example.invalid}`), and `networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 443 ]`.
+  - [x] Create `modules/proxy.nix` configuring `services.caddy` with `pkgs.caddy.withPlugins` (`github.com/caddy-dns/desec@v1.1.0`), `sops.templates."caddy.env"`, wildcard TLS (`*.{$YOUNIX_DOMAIN:example.invalid}`) with `resolvers 1.1.1.1 9.9.9.9`, declarative `younix.proxy.routes` option, built-in `health` endpoint, and `networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 443 ]`.
+  - [x] Register `modules/proxy.nix` in `flake.nix` and document operations/diagnostics in `docs/runbook.md` and `README.md`.
 - **Verification**:
-  - `systemctl status caddy`, `curl -I https://...` over Tailscale returns valid Let's Encrypt wildcard TLS cert with no browser warnings, and port `443` is unreachable from non-Tailscale interfaces.
+  - [ ] Deploy on `testing-younix` (then merge to `main`), verify `systemctl status caddy` + `journalctl -u caddy -n 50` shows wildcard cert issued cleanly.
+  - [ ] `curl -i https://health.<domain>` over Tailscale returns `200` (`younix proxy ok`) with valid Let's Encrypt wildcard cert and no warnings.
+  - [ ] Confirm `sudo iptables -L younix-tailscale-in -n -v` shows TCP `22` and `443` only, and port `443` is unreachable from LAN IP (`younix.local`).
 
 ---
 

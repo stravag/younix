@@ -414,3 +414,41 @@ tailscale ip -4
 sudo iptables -L younix-tailscale-in -n -v
 sudo ip6tables -L younix-tailscale-in -n -v
 ```
+
+---
+
+## 8. Reverse Proxy & HTTPS (Caddy + deSEC DNS-01)
+
+`modules/proxy.nix` runs **Caddy** built with `github.com/caddy-dns/desec` to serve all future web apps over HTTPS using a single wildcard Let's Encrypt certificate (`*.<domain>`):
+
+- **Zero public ports:** DNS-01 validation updates `_acme-challenge` TXT records via the deSEC API; port `443` is exposed strictly on `tailscale0` (never LAN or WAN).
+- **Private domain & credentials:** Both `caddy.domain` and `caddy.desec_token` live encrypted in `secrets/secrets.yaml` and are rendered at runtime into `/run/secrets/rendered/caddy.env`.
+- **Adding a new service route:** Any NixOS service module simply declares `younix.proxy.routes.<subdomain>.upstream = "127.0.0.1:<port>";` (with optional `extraConfig`) to inherit the wildcard TLS cert and security headers automatically.
+
+### Updating Caddy Secrets
+
+```bash
+sops secrets/secrets.yaml
+```
+
+```yaml
+caddy:
+  domain: <your-delegated-subdomain>
+  desec_token: <your-desec-api-token>
+```
+
+Saving, committing, and pushing automatically restarts `caddy.service` once `comin` deploys.
+
+### Diagnostics
+
+```bash
+# Check Caddy service and ACME DNS-01 certificate issuance logs
+systemctl status caddy
+journalctl -u caddy -n 50
+
+# Verify wildcard HTTPS certificate & proxy routing from a Tailscale device
+curl -i https://health.<your-delegated-subdomain>
+
+# Confirm port 443 is allowed on tailscale0 (and NOT on LAN)
+sudo iptables -L younix-tailscale-in -n -v
+```

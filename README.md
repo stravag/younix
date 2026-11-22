@@ -21,6 +21,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
 - `modules/samba.nix` — macOS-friendly SMB3 file sharing (`vfs_fruit`, Avahi Bonjour + WSDD discovery, declarative password via `sops-nix`).
 - `modules/remote-access.nix` — Zero-port-forward Tailscale remote access with strict per-port `tailscale0` firewall isolation.
+- `modules/proxy.nix` — Caddy HTTPS reverse proxy with automatic wildcard DNS-01 TLS via deSEC (domain & token encrypted in `sops-nix`, port 443 restricted to `tailscale0`).
 - `secrets/secrets.yaml` — `age`-encrypted secrets file managed via `sops`.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.
