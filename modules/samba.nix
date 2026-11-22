@@ -18,7 +18,7 @@ let
   # ---------------------------------------------------------------------------
   sambaUsers = {
     ranil = {
-      shares = [ "media" "photos" ];
+      shares = [ "media" "photos" "share" ];
       personalShare = false;
     };
     # Example:
@@ -43,6 +43,10 @@ let
     photos = {
       path = "/mnt/data/photos";
       comment = "Photo library";
+    };
+    share = {
+      path = "/mnt/data/share";
+      comment = "Arbitrary stuff";
     };
   };
 
