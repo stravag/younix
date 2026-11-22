@@ -48,17 +48,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
-### T-013 — Intel QuickSync hardware acceleration
-- **Status**: `in-progress`
-- **Depends on**: none
-- **Goal**: Expose Intel Alder Lake iGPU (`/dev/dri/renderD128`) for hardware video transcoding (Jellyfin, Immich).
-- **Scope**:
-  - Create `modules/graphics.nix` (or add to `hosts/younix/configuration.nix`) enabling `hardware.graphics` with `pkgs.intel-media-driver` and `pkgs.vpl-gpu-rt` (plus `intel-gpu-tools` / `libva-utils` for diagnostics).
-- **Verification**:
-  - `vainfo` on `younix` lists H.264 / HEVC / AV1 decode and H.264 / HEVC encode profiles without errors.
-
 ### T-014 — Jellyfin media server
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-007`, `T-012`, `T-013`
 - **Goal**: Deploy Jellyfin natively with Intel QuickSync hardware transcoding and media stored on the HDD array.
 - **Scope**:
@@ -70,7 +61,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
   - Stream a video and trigger transcoding; verify GPU usage with `intel_gpu_top`.
 
 ### T-015 — Immich photo & video management
-- **Status**: `blocked`
+- **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-012`, `T-013`
 - **Goal**: Deploy Immich natively with originals on the HDD array and database/thumbnails on the NVMe for fast browsing.
 - **Scope**:
@@ -195,3 +186,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/proxy.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed `services.caddy` built with `github.com/caddy-dns/desec@v1.1.0` and wildcard DNS-01 TLS (`propagation_delay 60s`, `propagation_timeout 5m`, `resolvers 1.1.1.1 9.9.9.9`) using a dedicated delegated subdomain (`NS` → deSEC) pointing to `younix`'s private Tailscale IP. Both domain and deSEC API token are encrypted in `secrets/secrets.yaml` via `sops.templates."caddy.env"`. Added declarative `younix.proxy.routes`, security headers, built-in `health` endpoint, `abort` for unknown subdomains, and `tailscale0`-only TCP `443` access. Verified valid Let's Encrypt wildcard HTTPS over Tailscale and LAN port `443` isolation.
+
+### T-013 — Intel QuickSync hardware acceleration
+- **Status**: `done`
+- **Artifacts**: `modules/graphics.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Enabled Intel Alder Lake iGPU (`/dev/dri/renderD128`, PCI `8086:46b3`) hardware acceleration via `hardware.graphics` with `intel-media-driver` (VA-API `iHD`), `vpl-gpu-rt` (oneVPL / QuickSync), `intel-compute-runtime` (OpenCL / Level Zero for HDR tone-mapping), `hardware.enableRedistributableFirmware = true`, `LIBVA_DRIVER_NAME = "iHD"`, and diagnostic tools (`libva-utils`, `intel-gpu-tools`, `clinfo`). Added `video` and `render` groups to `ranil`. Verified live on `younix`: `vainfo` reports Intel `iHD` driver 26.1.6 with H.264/HEVC/VP9/AV1 decode and H.264/HEVC/VP9 encode (`EncSlice`/`EncSliceLP`), `clinfo --list` exposes `Intel(R) OpenCL Graphics`, and `dmesg` confirms `i915` DMC, GuC submission/SLPC/RC, and HuC authentication active out of the box.
