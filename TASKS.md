@@ -49,7 +49,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 3 — Self-Hosted Services
 
 ### T-013 — Intel QuickSync hardware acceleration
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: none
 - **Goal**: Expose Intel Alder Lake iGPU (`/dev/dri/renderD128`) for hardware video transcoding (Jellyfin, Immich).
 - **Scope**:

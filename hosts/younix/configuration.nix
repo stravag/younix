@@ -35,7 +35,7 @@
   users.users.ranil = {
     isNormalUser = true;
     description = "Ranil";
-    extraGroups = [ "wheel" ];
+    extraGroups = [ "wheel" "video" "render" ];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKCuWX/W66sjjNiDNuPpKgYO1xFqDoMJoeo5hz2LDNrF"
     ];

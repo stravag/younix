@@ -18,6 +18,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/secrets.nix` — Encrypted declarative secrets via `sops-nix` (decrypted via `/etc/keys/sops.key` into `/run/secrets/`).
 - `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), `drivetemp`, `thermald`, and standby-safe quiet `younix-fancontrol` daemon.
 - `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller.
+- `modules/graphics.nix` — Intel Alder Lake QuickSync hardware acceleration (`intel-media-driver` VA-API, `vpl-gpu-rt` oneVPL, `intel-compute-runtime` OpenCL) and GPU diagnostics (`vainfo`, `intel_gpu_top`, `clinfo`).
 - `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
 - `modules/samba.nix` — macOS-friendly SMB3 file sharing (`vfs_fruit`, Avahi Bonjour + WSDD discovery, declarative password via `sops-nix`).
 - `modules/remote-access.nix` — Zero-port-forward Tailscale remote access with strict per-port `tailscale0` firewall isolation.

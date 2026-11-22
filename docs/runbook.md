@@ -452,3 +452,33 @@ curl -i https://health.<your-delegated-subdomain>
 # Confirm port 443 is allowed on tailscale0 (and NOT on LAN)
 sudo iptables -L younix-tailscale-in -n -v
 ```
+
+---
+
+## 9. Intel QuickSync Hardware Acceleration
+
+`modules/graphics.nix` exposes the UGREEN DXP4800 Plus's Intel Alder Lake iGPU (Pentium Gold 8505, `/dev/dri/renderD128`) for native hardware video transcoding and tone-mapping:
+
+- **VA-API (`intel-media-driver` / `iHD`)**: Hardware decode (H.264, HEVC, VP9, AV1) and encode (H.264, HEVC, VP9).
+- **oneVPL (`vpl-gpu-rt`)**: Intel QuickSync Video (QSV) runtime for Gen 12+ media pipelines (Jellyfin, Immich).
+- **OpenCL (`intel-compute-runtime`)**: NEO OpenCL/Level Zero runtime for hardware HDR-to-SDR tone-mapping and subtitle burn-in filters.
+- **Permissions**: Any service using `/dev/dri/renderD128` must belong to the `video` and `render` Unix groups (already granted to `ranil` for interactive diagnostics).
+
+### Diagnostics
+
+```bash
+# Confirm DRM render node exists and has render/video group permissions
+ls -la /dev/dri
+
+# Verify Intel iHD VA-API driver and supported decode/encode profiles
+vainfo --display drm --device /dev/dri/renderD128
+
+# Verify Intel OpenCL platform (used for HDR tone-mapping)
+clinfo --list
+
+# Confirm Intel i915 GuC/HuC firmware loaded and authenticated cleanly
+sudo dmesg | grep -iE 'i915|guc|huc'
+
+# Monitor live GPU & video engine utilization (e.g. during transcoding)
+sudo intel_gpu_top
+```

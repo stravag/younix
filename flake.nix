@@ -28,6 +28,7 @@
           ./modules/secrets.nix
           ./modules/thermals.nix
           ./modules/leds.nix
+          ./modules/graphics.nix
           ./modules/storage.nix
           ./modules/samba.nix
           ./modules/remote-access.nix
