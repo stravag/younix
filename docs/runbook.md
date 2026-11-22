@@ -482,3 +482,36 @@ sudo dmesg | grep -iE 'i915|guc|huc'
 # Monitor live GPU & video engine utilization (e.g. during transcoding)
 sudo intel_gpu_top
 ```
+
+---
+
+## 10. Jellyfin Media Server
+
+`modules/services/jellyfin.nix` deploys Jellyfin natively behind Caddy HTTPS (`https://jellyfin.<your-delegated-subdomain>`, Tailscale-only) with Intel QuickSync (QSV) hardware transcoding:
+
+- **Hardware transcoding:** Declaratively managed via `services.jellyfin.hardwareAcceleration` (`type = "qsv"`, `/dev/dri/renderD128`) and `services.jellyfin.transcoding` (`forceEncodingConfig = true`, low-power H.264/HEVC encoding, OpenCL HDR tone-mapping, Alder Lake decode/encode codecs). Edit `modules/services/jellyfin.nix` rather than the web UI to persist transcoding changes across restarts.
+- **Storage layout:** SQLite DB, metadata, and trickplay/transcode caches live on the fast 1 TB NVMe (`/var/lib/jellyfin`, `/var/cache/jellyfin`); media libraries live on the HDD array (`/mnt/data/media`, accessible via the shared `media` Unix group).
+- **Network access:** Port `8096` stays closed in the firewall (`openFirewall = false`); all traffic flows over HTTPS through Caddy on `tailscale0`. If direct LAN HTTP access is ever needed for non-Tailscale smart TVs, set `services.jellyfin.openFirewall = true` (`tailscale0` remains strictly restricted to ports `22` and `443`).
+
+### One-Time First-Run Setup
+
+1. Open `https://jellyfin.<your-delegated-subdomain>` from a Tailscale-connected device and complete the initial setup wizard (create your admin account and add media libraries pointing at `/mnt/data/media/...`).
+2. Under **Dashboard → Networking → Known Proxies**, add `127.0.0.1,::1` and save (then restart `jellyfin.service` if prompted) so activity logs record real client Tailscale IPs rather than `127.0.0.1`.
+
+### Diagnostics & Transcoding Verification
+
+```bash
+# Check Jellyfin service status and logs
+systemctl status jellyfin
+journalctl -u jellyfin -n 50
+
+# Confirm jellyfin group memberships (video, render, media) and render node access
+id jellyfin
+sudo -u jellyfin LIBVA_DRIVER_NAME=iHD vainfo --display drm --device /dev/dri/renderD128
+
+# Inspect declaratively generated encoding.xml
+sudo cat /var/lib/jellyfin/config/encoding.xml
+
+# Verify Intel QuickSync GPU usage while streaming a transcoded video (watch Video / Render/3D engines)
+sudo intel_gpu_top
+```

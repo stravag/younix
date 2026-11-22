@@ -33,6 +33,7 @@
           ./modules/samba.nix
           ./modules/remote-access.nix
           ./modules/proxy.nix
+          ./modules/services/jellyfin.nix
         ];
       };
     };

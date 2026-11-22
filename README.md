@@ -23,6 +23,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/samba.nix` — macOS-friendly SMB3 file sharing (`vfs_fruit`, Avahi Bonjour + WSDD discovery, declarative password via `sops-nix`).
 - `modules/remote-access.nix` — Zero-port-forward Tailscale remote access with strict per-port `tailscale0` firewall isolation.
 - `modules/proxy.nix` — Caddy HTTPS reverse proxy with automatic wildcard DNS-01 TLS via deSEC (domain & token encrypted in `sops-nix`, port 443 restricted to `tailscale0`).
+- `modules/services/jellyfin.nix` — Native Jellyfin media server with Intel QuickSync (QSV) hardware transcoding, NVMe metadata/cache (`/var/lib/jellyfin`, `/var/cache/jellyfin`), `/mnt/data/media` library access, and Caddy HTTPS route (`jellyfin.<domain>`).
 - `secrets/secrets.yaml` — `age`-encrypted secrets file managed via `sops`.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.
