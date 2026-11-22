@@ -95,6 +95,10 @@ in
             dns desec {
               token {$DESEC_TOKEN:placeholder}
             }
+            # Wait for deSEC's global Anycast PoPs to sync before checking DNS or
+            # triggering Let's Encrypt's multi-region secondary validation.
+            propagation_delay 60s
+            propagation_timeout 5m
             resolvers 1.1.1.1 9.9.9.9
           }
 
