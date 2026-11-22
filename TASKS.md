@@ -4,6 +4,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## For Agents: How to Use This File
 
+- **Never execute commands directly on `younix`**: Do not SSH into `younix` or execute remote commands against the NAS (see `AGENTS.md`). Always give the user the exact deployment and verification commands to run on `younix` themselves.
 - **Public repository**: `github:stravag/younix` is public. **Never** commit plaintext passwords, API keys, auth keys, or private keys.
 - **Module conventions**: Put each feature in its own `modules/<feature>.nix` file and register it in `flake.nix`. Keep host-specific settings in `hosts/younix/configuration.nix`.
 - **Safe rollouts**: For risky changes (storage mounts, networking, firewall, SSH, bootloader), test on the `testing-younix` branch first (`comin` activates temporarily via `test`, so a reboot reverts to `main`).
@@ -49,7 +50,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 3 — Self-Hosted Services
 
 ### T-014 — Jellyfin media server
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: `T-007`, `T-012`, `T-013`
 - **Goal**: Deploy Jellyfin natively with Intel QuickSync hardware transcoding and media stored on the HDD array.
 - **Scope**:

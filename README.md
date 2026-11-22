@@ -28,6 +28,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.
 - `TASKS.md` — Single-source project roadmap.
+- `AGENTS.md` — Guidelines and boundaries for AI coding agents working on this repo.
 
 ## Quick Reference
 
