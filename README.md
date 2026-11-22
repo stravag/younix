@@ -20,6 +20,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller.
 - `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
 - `modules/samba.nix` — macOS-friendly SMB3 file sharing (`vfs_fruit`, Avahi Bonjour + WSDD discovery, declarative password via `sops-nix`).
+- `modules/remote-access.nix` — Zero-port-forward Tailscale remote access with strict per-port `tailscale0` firewall isolation.
 - `secrets/secrets.yaml` — `age`-encrypted secrets file managed via `sops`.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.
@@ -42,6 +43,10 @@ sudo comin fetch
 findmnt -R /mnt
 df -h /mnt/parity1 /mnt/disk1 /mnt/data
 sudo snapraid status
+
+# Remote access status (Tailscale)
+tailscale status
+tailscale ip -4
 ```
 
 For risky changes, push to the `testing-younix` branch first (`comin` activates temporarily via `test`, so a reboot reverts to `main`). See the [Operations & Recovery Runbook](docs/runbook.md) for full details.

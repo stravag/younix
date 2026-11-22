@@ -30,6 +30,7 @@
           ./modules/leds.nix
           ./modules/storage.nix
           ./modules/samba.nix
+          ./modules/remote-access.nix
         ];
       };
     };

@@ -49,28 +49,27 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 2 — Access & Networking
 
 ### T-010 — Remote access via Tailscale (zero port-forwarding)
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: none
 - **Goal**: Access `younix` and its web services securely from anywhere without opening router ports.
 - **Scope**:
-  - Create `modules/remote-access.nix` enabling `services.tailscale` with `openFirewall = true`, trusted `tailscale0` interface, and `useRoutingFeatures = "server"` (optional, if subnet routing/exit node is wanted).
-  - Configure Tailscale HTTPS certificates (MagicDNS + HTTPS enabled in Tailscale admin) so Caddy can obtain valid TLS certs automatically.
+  - [x] Create `modules/remote-access.nix` enabling `services.tailscale` with `openFirewall = true`, `useRoutingFeatures = "none"`, `checkReversePath = "loose"`, and strict per-port `tailscale0` firewall isolation (`younix-tailscale-in` chain allowing only allowlisted `tailscale0` ports — TCP `22` here, keeping Samba/WSDD/Avahi LAN-only).
+  - [x] Register `modules/remote-access.nix` in `flake.nix` and document enrollment & hardening in `docs/runbook.md` and `README.md`.
 - **Manual steps**:
-  - One-time interactive `sudo tailscale up` on `younix` (avoids storing reusable auth keys in git) and enable MagicDNS + HTTPS in the Tailscale admin console.
+  - [ ] Deploy on `testing-younix` (then merge to `main`), run `sudo tailscale up --ssh=false --accept-routes=false --accept-dns=false`, and configure Tailscale admin hardening (Device Approval, disable key expiry on `younix` only, least-privilege ACLs, no Funnel).
 - **Verification**:
-  - `tailscale status`, SSH and ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
+  - [ ] `tailscale status`, `sudo iptables -L younix-tailscale-in -n -v`, and SSH/ping `younix` from phone/Mac off-LAN (e.g., cellular hotspot).
 
 ### T-012 — Reverse proxy & HTTPS with Caddy
 - **Status**: `blocked`
 - **Depends on**: `T-010`
-- **Goal**: Serve Jellyfin, Immich, and Paperless over HTTPS on clean URLs without remembering ports.
-- **Open decision** (confirm before coding):
-  - **Option A (Simplest, no domain needed)**: Use Tailscale Serve or Caddy with `younix.<tailnet>.ts.net` (separate ports or paths, or Tailscale Services).
-  - **Option B (Cleanest UX)**: Own a cheap domain (e.g., `jellyfin.home.example.com`, `photos.home.example.com`, `docs.home.example.com`) pointing to the Tailscale/LAN IP with Caddy DNS-01 ACME certs (requires DNS API token in `sops-nix`).
+- **Goal**: Serve Jellyfin, Immich, and Paperless over HTTPS on clean URLs without remembering ports or exposing services publicly.
+- **Decision (resolved)**:
+  - **Custom domain via Metanet → deSEC subdomain delegation + Caddy wildcard DNS-01 cert**: Delegate a dedicated subdomain (e.g. `home.<domain>`) from Metanet to free EU DNS provider [deSEC](https://desec.io) via 2 `NS` records, point `*.home.<domain>` to `younix`'s private Tailscale IP, and use a scoped deSEC API token (`_acme-challenge` TXT only). Keep both the base domain and token encrypted in `secrets/secrets.yaml` (`sops-nix`, injected via Caddy `{$YOUNIX_DOMAIN}` / `{env.DESEC_TOKEN}`), and restrict Caddy port `443` strictly to `tailscale0`.
 - **Scope**:
-  - Create `modules/proxy.nix` configuring `services.caddy` (or Tailscale Serve integration) and firewall rules (restricting proxy ports to LAN / `tailscale0` as desired).
+  - Create `modules/proxy.nix` configuring `services.caddy` with `pkgs.caddy.withPlugins` (`github.com/caddy-dns/desec`), `sops.templates` for Caddy's `environmentFile`, wildcard TLS (`*.{$YOUNIX_DOMAIN:example.invalid}`), and `networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 443 ]`.
 - **Verification**:
-  - `systemctl status caddy`, `curl -I https://...` returns valid TLS cert with no browser warnings.
+  - `systemctl status caddy`, `curl -I https://...` over Tailscale returns valid Let's Encrypt wildcard TLS cert with no browser warnings, and port `443` is unreachable from non-Tailscale interfaces.
 
 ---
 

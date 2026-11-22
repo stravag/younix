@@ -369,3 +369,48 @@ sudo smbstatus
 sudo pdbedit -L
 ls -ld /mnt/data/media /mnt/data/photos
 ```
+
+---
+
+## 7. Remote Access (Tailscale)
+
+Remote access is provided by `modules/remote-access.nix` using **Tailscale** (outbound-only WireGuard mesh — zero router port-forwarding). To minimize the attack surface, `tailscale0` is **not** a trusted interface: a dedicated `younix-tailscale-in` firewall chain allows only explicitly allowlisted `tailscale0` ports (`22` for SSH, and `443` once `modules/proxy.nix` is deployed) plus ICMP echo, keeping LAN services (Samba `445/139`, WSDD, Avahi) unreachable over Tailscale.
+
+### One-Time Enrollment (Interactive, No Auth Keys in Git)
+
+After deploying `modules/remote-access.nix` to `younix`, authenticate interactively once over SSH:
+
+```bash
+sudo tailscale up --ssh=false --accept-routes=false --accept-dns=false
+```
+
+- `--ssh=false`: Keeps SSH strictly bound to OpenSSH + your `ed25519` key (a compromised Tailscale login alone cannot shell into `younix`).
+- `--accept-routes=false`: Prevents other nodes from injecting routes into `younix`.
+- `--accept-dns=false`: Keeps `younix`'s local DNS resolution untouched (important for LAN mDNS and Caddy DNS-01 queries).
+
+Open the printed login URL in your browser to authorize `younix`, then record its private Tailscale IPv4 address:
+
+```bash
+tailscale status
+tailscale ip -4
+```
+
+### Recommended Tailscale Admin Console Hardening
+
+1. **Device Approval:** Enable *Device approval* under **Settings → Device management** so no new device can join your tailnet without explicit admin approval.
+2. **Key Expiry:** Disable key expiry **only** on `younix` (so the headless NAS stays online unattended); keep key expiry enabled on personal laptops and phones.
+3. **Least-Privilege ACLs / Grants:** Restrict access in **Access Controls** so only your admin Mac can reach `younix:22` (SSH), while phones/family devices can only reach `younix:443` (HTTPS). Keep **Tailscale Funnel** disabled.
+4. **Tailnet Lock (Optional):** Enable Tailnet Lock for cryptographic node-key signing if you want zero trust in Tailscale's control plane.
+
+### Diagnostics
+
+```bash
+# Check Tailscale daemon and peers
+systemctl status tailscaled
+tailscale status
+tailscale ip -4
+
+# Verify strict tailscale0 firewall chain (only allowlisted ports + ping)
+sudo iptables -L younix-tailscale-in -n -v
+sudo ip6tables -L younix-tailscale-in -n -v
+```
