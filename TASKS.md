@@ -49,18 +49,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
-### T-014 — Jellyfin media server
-- **Status**: `in-progress`
-- **Depends on**: `T-007`, `T-012`, `T-013`
-- **Goal**: Deploy Jellyfin natively with Intel QuickSync hardware transcoding and media stored on the HDD array.
-- **Scope**:
-  - Create `modules/services/jellyfin.nix` enabling `services.jellyfin`.
-  - Add the `jellyfin` user to `video` and `render` groups (and shared media group for read access to `/mnt/data/media`).
-  - Keep Jellyfin cache/metadata on the fast NVMe (`/var/lib/jellyfin`).
-  - Add reverse proxy route in `modules/proxy.nix`.
-- **Verification**:
-  - Stream a video and trigger transcoding; verify GPU usage with `intel_gpu_top`.
-
 ### T-015 — Immich photo & video management
 - **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-012`, `T-013`
@@ -105,7 +93,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Open decision**: Choose an offsite storage target (e.g., Hetzner Storage Box, Backblaze B2, Cloudflare R2, or a remote friend/family machine).
 - **Scope**:
   - Create `modules/backups.nix` using `services.restic.backups` with repository password & credentials stored via `sops-nix`.
-  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`), explicitly excluding bulk `/mnt/data/media`.
+  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`, `/var/lib/jellyfin/data`, `/var/lib/jellyfin/config`), explicitly excluding bulk `/mnt/data/media`.
   - Configure retention (`pruneOpts`) and periodic `checkOpts` to verify backup integrity.
 - **Verification**:
   - Trigger a backup run, inspect `restic snapshots`, and perform a test restore of one file to `/tmp`.
@@ -192,3 +180,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/graphics.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
 - **Summary**: Enabled Intel Alder Lake iGPU (`/dev/dri/renderD128`, PCI `8086:46b3`) hardware acceleration via `hardware.graphics` with `intel-media-driver` (VA-API `iHD`), `vpl-gpu-rt` (oneVPL / QuickSync), `intel-compute-runtime` (OpenCL / Level Zero for HDR tone-mapping), `hardware.enableRedistributableFirmware = true`, `LIBVA_DRIVER_NAME = "iHD"`, and diagnostic tools (`libva-utils`, `intel-gpu-tools`, `clinfo`). Added `video` and `render` groups to `ranil`. Verified live on `younix`: `vainfo` reports Intel `iHD` driver 26.1.6 with H.264/HEVC/VP9/AV1 decode and H.264/HEVC/VP9 encode (`EncSlice`/`EncSliceLP`), `clinfo --list` exposes `Intel(R) OpenCL Graphics`, and `dmesg` confirms `i915` DMC, GuC submission/SLPC/RC, and HuC authentication active out of the box.
+
+### T-014 — Jellyfin media server
+- **Status**: `done`
+- **Artifacts**: `modules/services/jellyfin.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed native `services.jellyfin` with declarative Intel Alder Lake QuickSync (QSV) hardware transcoding (`hardwareAcceleration.type = "qsv"`, `/dev/dri/renderD128`, `forceEncodingConfig = true`, low-power H.264/HEVC encoding, OpenCL HDR tone-mapping, transcode throttling, and Alder Lake decode/encode codecs). Kept DB/metadata/caches on the 1 TB NVMe (`/var/lib/jellyfin`, `/var/cache/jellyfin`), granted `jellyfin` `video`, `render`, and `media` group memberships with boot ordering after `mnt-data.mount` and `younix-samba-dirs.service`, kept port `8096` closed in the firewall, and exposed HTTPS via Caddy (`younix.proxy.routes.jellyfin` over `tailscale0`). Verified live playback, library access, and active Intel GPU transcoding in `intel_gpu_top`.
