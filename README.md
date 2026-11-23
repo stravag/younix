@@ -16,7 +16,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `hosts/younix/hardware-configuration.nix` — Hardware & root filesystem definitions generated on the NAS.
 - `modules/gitops.nix` — Pull-based GitOps deployment with `comin` (polls `main` every 1 hour; supports `testing-younix`).
 - `modules/secrets.nix` — Encrypted declarative secrets via `sops-nix` (decrypted via `/etc/keys/sops.key` into `/run/secrets/`).
-- `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`) for read-only `sensors` visibility, `thermald`, and `powersave` CPU governor (fan control left to native BIOS Smart Fan).
+- `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), one-shot `udev` hardware Smart Fan tuning (zero fan daemon), `thermald`, and `powersave` CPU governor.
 - `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller.
 - `modules/graphics.nix` — Intel Alder Lake QuickSync hardware acceleration (`intel-media-driver` VA-API, `vpl-gpu-rt` oneVPL, `intel-compute-runtime` OpenCL) and GPU diagnostics (`vainfo`, `intel_gpu_top`, `clinfo`).
 - `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
