@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, inputs, lib, pkgs, ... }:
 
 let
   nvmeDir = "/var/lib/immich";
@@ -49,6 +49,24 @@ let
   '';
 in
 {
+  # Pull the Immich module & packages from nixpkgs-unstable so Immich runs a
+  # supported v3.x release (26.05's immich-2.7.5 is EOL/insecure) while the
+  # rest of younix remains on stable nixos-26.05.
+  disabledModules = [ "services/web-apps/immich.nix" ];
+  imports = [ "${inputs.nixpkgs-unstable}/nixos/modules/services/web-apps/immich.nix" ];
+
+  nixpkgs.overlays = [
+    (_final: prev:
+      let
+        pkgsUnstable = inputs.nixpkgs-unstable.legacyPackages.${prev.stdenv.hostPlatform.system};
+      in
+      { inherit (pkgsUnstable) immich; }
+      // lib.optionalAttrs (pkgsUnstable ? immich-machine-learning) {
+        inherit (pkgsUnstable) immich-machine-learning;
+      }
+    )
+  ];
+
   assertions = [
     {
       assertion = config.hardware.graphics.enable;

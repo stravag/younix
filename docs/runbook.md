@@ -520,7 +520,7 @@ sudo intel_gpu_top
 
 ## 11. Immich Photo & Video Server
 
-`modules/services/immich.nix` deploys Immich natively behind Caddy HTTPS (`https://photos.<your-delegated-subdomain>`, Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video transcoding:
+`modules/services/immich.nix` deploys Immich natively (pulled from `nixpkgs-unstable` for current v3.x releases while the base OS stays on stable `nixos-26.05`) behind Caddy HTTPS (`https://photos.<your-delegated-subdomain>`, Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video transcoding:
 
 - **Hybrid storage layout:**
   - `/mnt/data/photos` — Clean, human-organized **Family Album** managed via Samba (`modules/samba.nix`), exposed strictly **read-only** (`ReadOnlyPaths`) to `immich-server` (via the `photos` Unix group) for indexing as an **External Library**.
