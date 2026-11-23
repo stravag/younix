@@ -134,7 +134,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ### T-003 — Thermal & fan control
 - **Status**: `done`
 - **Artifacts**: `modules/thermals.nix`
-- **Summary**: Built out-of-tree `it87` driver (IT8613E) + `drivetemp`, enabled `thermald` and `powersave` governor, and deployed `younix-fancontrol` daemon with fail-safe restore to hardware auto mode.
+- **Summary**: Built out-of-tree `it87` driver (IT8613E) for read-only `sensors` visibility, enabled `thermald` and `powersave` governor, and left fan speed control to the motherboard's native BIOS Smart Fan controller (removed the custom `younix-fancontrol` daemon and `drivetemp` polling).
 
 ### T-004 — UGREEN front-panel LED controller
 - **Status**: `done`
