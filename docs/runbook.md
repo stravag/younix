@@ -528,6 +528,7 @@ sudo intel_gpu_top
   - `/var/lib/immich/{thumbs,encoded-video}` — Fast NVMe cache projected onto `/mnt/data/immich/{thumbs,encoded-video}` inside `immich-server`'s mount namespace via systemd `BindPaths`. The underlying HDD folders stay empty (avoiding SnapRAID churn and offsite backup bloat), and timeline browsing / transcoded playback never wake sleeping HDDs.
   - PostgreSQL (with vector extension), Valkey/Redis, and ML models (`immich-machine-learning`) all run on the 1 TB NVMe SSD.
 - **Hardware acceleration:** `/dev/dri/renderD128` is exposed via `services.immich.accelerationDevices` + `video`/`render` group memberships and `LIBVA_DRIVER_NAME=iHD`.
+- **Resource isolation:** Both `immich-server` (`Nice=10`, `CPUQuota=400%`, `MemoryHigh=2500M`, `MemoryMax=3500M`, `OOMScoreAdjust=300`) and `immich-machine-learning` (`Nice=15`, `IOSchedulingClass=idle`, `CPUQuota=300%`, `MemoryHigh=2G`, `MemoryMax=3G`, `OOMScoreAdjust=500`) are cgroup-bounded alongside `zramSwap` (`zstd`, 50% RAM) so bulk imports never starve SSH or OOM-kill Jellyfin.
 - **Mount safety:** `younix-immich-dirs.service` creates directories and `.immich` sentinel files only when `/mnt/data` is mounted, and `immich-server.service` uses `ConditionPathIsMountPoint=/mnt/data` so a degraded HDD array never writes uploads to the root NVMe.
 
 ### One-Time First-Run Setup (Family Album + Private Albums)

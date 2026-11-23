@@ -170,6 +170,27 @@ in
       ReadOnlyPaths = [
         externalPhotosDir
       ];
+      # Prevent bulk library scans/thumbnailing from starving SSH, Caddy, Samba, or Jellyfin.
+      Nice = 10;
+      IOSchedulingClass = "best-effort";
+      IOSchedulingPriority = 7;
+      CPUQuota = "400%";
+      MemoryHigh = "2500M";
+      MemoryMax = "3500M";
+      OOMScoreAdjust = 300;
+    };
+  };
+
+  systemd.services.immich-machine-learning = {
+    serviceConfig = {
+      # Keep CLIP/face-recognition bursts bounded so ML never triggers global OOM
+      # or starves interactive services during initial library imports.
+      Nice = 15;
+      IOSchedulingClass = "idle";
+      CPUQuota = "300%";
+      MemoryHigh = "2G";
+      MemoryMax = "3G";
+      OOMScoreAdjust = 500;
     };
   };
 

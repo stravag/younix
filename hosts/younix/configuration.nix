@@ -54,6 +54,14 @@
     };
   };
 
+  # Compressed in-RAM swap (zstd) gives an 8 GB NAS headroom for spiky ML,
+  # thumbnailing, and Nix build workloads without adding NVMe SSD wear.
+  zramSwap = {
+    enable = true;
+    algorithm = "zstd";
+    memoryPercent = 50;
+  };
+
   # Nix settings & automatic garbage collection
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
