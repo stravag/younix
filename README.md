@@ -24,6 +24,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/remote-access.nix` — Zero-port-forward Tailscale remote access with strict per-port `tailscale0` firewall isolation.
 - `modules/proxy.nix` — Caddy HTTPS reverse proxy with automatic wildcard DNS-01 TLS via deSEC (domain & token encrypted in `sops-nix`, port 443 restricted to `tailscale0`).
 - `modules/services/jellyfin.nix` — Native Jellyfin media server with Intel QuickSync (QSV) hardware transcoding, NVMe metadata/cache (`/var/lib/jellyfin`, `/var/cache/jellyfin`), `/mnt/data/media` library access, and Caddy HTTPS route (`jellyfin.<domain>`).
+- `modules/services/immich.nix` — Native Immich photo & video server with Intel QuickSync (QSV) transcoding, hybrid HDD/NVMe storage (`/mnt/data/photos` read-only External Library + `/mnt/data/immich` uploads on HDD + `/var/lib/immich/{thumbs,encoded-video}`, PostgreSQL, Redis, and ML on NVMe), and Caddy HTTPS route (`photos.<domain>`).
 - `secrets/secrets.yaml` — `age`-encrypted secrets file managed via `sops`.
 - `docs/bootstrap.md` — One-time OS, storage, and keyfile bootstrap instructions.
 - `docs/runbook.md` — Day-to-day operations, secrets management, and drive/keyfile recovery runbook.

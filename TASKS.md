@@ -50,16 +50,16 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 3 — Self-Hosted Services
 
 ### T-015 — Immich photo & video management
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: `T-006`, `T-007`, `T-012`, `T-013`
-- **Goal**: Deploy Immich natively with originals on the HDD array and database/thumbnails on the NVMe for fast browsing.
+- **Goal**: Deploy Immich natively with hybrid storage (Samba-managed family album at `/mnt/data/photos` as a read-only External Library, Immich-managed uploads & private user libraries at `/mnt/data/immich`, and database/ML/thumbnails/encoded videos on the NVMe for fast, silent browsing).
 - **Scope**:
-  - Create `modules/services/immich.nix` enabling `services.immich`.
-  - Configure `mediaLocation` on the HDD array (`/mnt/data/photos`), while keeping PostgreSQL and (optionally) `thumbs`/`encoded-video` fast storage on the NVMe.
-  - Grant `immich` access to `/dev/dri` (`video`, `render`) for hardware video transcoding.
-  - Add reverse proxy route in `modules/proxy.nix` (with large upload body limits for mobile video backups).
+  - Create `modules/services/immich.nix` enabling `services.immich` (`mediaLocation = "/mnt/data/immich"`, `accelerationDevices = [ "/dev/dri/renderD128" ]`, `machine-learning.enable = true`).
+  - Keep PostgreSQL, Redis, ML cache, and bind-mounted `thumbs`/`encoded-video` (`/var/lib/immich/{thumbs,encoded-video}`) on the 1 TB NVMe.
+  - Grant `immich` access to `/dev/dri` (`video`, `render`) for Intel QuickSync video transcoding and `photos` group (`ReadOnlyPaths = [ "/mnt/data/photos" ]`) for the Samba-managed family album External Library.
+  - Add reverse proxy route `photos.<domain>` in `modules/services/immich.nix` (`younix.proxy.routes.photos`).
 - **Verification**:
-  - Upload photos/videos via web UI and Immich mobile app (both LAN and over Tailscale); verify thumbnails generate and originals land on `/mnt/data/photos`.
+  - Deploy on `younix`, verify all services & NVMe bind mounts, configure QuickSync + `family` External Library (`/mnt/data/photos`) + Partner Sharing, and test web/mobile uploads and video transcoding.
 
 ### T-016 — Paperless-ngx document management
 - **Status**: `ready`
@@ -93,7 +93,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Open decision**: Choose an offsite storage target (e.g., Hetzner Storage Box, Backblaze B2, Cloudflare R2, or a remote friend/family machine).
 - **Scope**:
   - Create `modules/backups.nix` using `services.restic.backups` with repository password & credentials stored via `sops-nix`.
-  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`, `/var/lib/jellyfin/data`, `/var/lib/jellyfin/config`), explicitly excluding bulk `/mnt/data/media`.
+  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`, `/var/lib/jellyfin/data`, `/var/lib/jellyfin/config`), explicitly excluding bulk `/mnt/data/media`.
   - Configure retention (`pruneOpts`) and periodic `checkOpts` to verify backup integrity.
 - **Verification**:
   - Trigger a backup run, inspect `restic snapshots`, and perform a test restore of one file to `/tmp`.

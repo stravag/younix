@@ -515,3 +515,52 @@ sudo cat /var/lib/jellyfin/config/encoding.xml
 # Verify Intel QuickSync GPU usage while streaming a transcoded video (watch Video / Render/3D engines)
 sudo intel_gpu_top
 ```
+
+---
+
+## 11. Immich Photo & Video Server
+
+`modules/services/immich.nix` deploys Immich natively behind Caddy HTTPS (`https://photos.<your-delegated-subdomain>`, Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video transcoding:
+
+- **Hybrid storage layout:**
+  - `/mnt/data/photos` — Clean, human-organized **Family Album** managed via Samba (`modules/samba.nix`), exposed strictly **read-only** (`ReadOnlyPaths`) to `immich-server` (via the `photos` Unix group) for indexing as an **External Library**.
+  - `/mnt/data/immich` — Immich-managed `mediaLocation` on the MergerFS HDD pool (not exposed over Samba) holding mobile/web uploads (`upload/`, `library/`), profile avatars (`profile/`), and Immich DB dumps (`backups/`).
+  - `/var/lib/immich/{thumbs,encoded-video}` — Fast NVMe cache projected onto `/mnt/data/immich/{thumbs,encoded-video}` inside `immich-server`'s mount namespace via systemd `BindPaths`. The underlying HDD folders stay empty (avoiding SnapRAID churn and offsite backup bloat), and timeline browsing / transcoded playback never wake sleeping HDDs.
+  - PostgreSQL (with vector extension), Valkey/Redis, and ML models (`immich-machine-learning`) all run on the 1 TB NVMe SSD.
+- **Hardware acceleration:** `/dev/dri/renderD128` is exposed via `services.immich.accelerationDevices` + `video`/`render` group memberships and `LIBVA_DRIVER_NAME=iHD`.
+- **Mount safety:** `younix-immich-dirs.service` creates directories and `.immich` sentinel files only when `/mnt/data` is mounted, and `immich-server.service` uses `ConditionPathIsMountPoint=/mnt/data` so a degraded HDD array never writes uploads to the root NVMe.
+
+### One-Time First-Run Setup (Family Album + Private Albums)
+
+1. **Create your admin account:** Open `https://photos.<your-delegated-subdomain>` from a Tailscale-connected device and register your personal admin account (e.g., Ranil).
+2. **Enable Intel QuickSync transcoding:** Under **Administration → Settings → Video Transcoding Settings**, select **Hardware Acceleration: Quick Sync** (device `/dev/dri/renderD128`) and enable hardware decoding.
+3. **Enable Storage Template (recommended):** Under **Administration → Settings → Storage Template**, enable a clean human-readable layout (e.g., `{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}`) so uploaded originals under `/mnt/data/immich/library/` remain easy to browse and back up.
+4. **Align nightly jobs with SnapRAID (`04:00`):** Under **Administration → Settings → Backup Settings** and **Library**, schedule daily DB backups and external library scans around `03:00–03:30` so array HDDs wake once per night.
+5. **Wire up the shared Family Album (`/mnt/data/photos`):**
+   - Under **Administration → Users**, create a dedicated **`family`** account (plus personal accounts for any other family members).
+   - Under **Administration → External Libraries**, create an external library owned by **`family`** with import path **`/mnt/data/photos`**, and trigger an initial scan.
+   - Sign in once as **`family`**, open **Account Settings → Sharing (Partner Sharing)**, and share with your personal account and each family member's account.
+   - In each family member's personal account (**Account Settings → Sharing**), turn on **"Show in timeline"** for **`family`**.
+   - **Result:** Everyone sees the shared `/mnt/data/photos` family album in their timeline (add new family archive photos anytime via the `photos` Samba share), while every user's own account & mobile backups stay private by default (and anyone can use collaborative **Shared Albums** to share phone photos with the family).
+
+### Diagnostics & Verification
+
+```bash
+# Check Immich services (server, ML, PostgreSQL, Redis, and directory setup)
+systemctl status younix-immich-dirs immich-server immich-machine-learning postgresql redis-immich
+journalctl -u immich-server -u immich-machine-learning -n 50
+
+# Confirm immich group memberships (video, render, photos) and Intel iHD access
+id immich
+sudo -u immich LIBVA_DRIVER_NAME=iHD vainfo --display drm --device /dev/dri/renderD128
+
+# Verify NVMe storage vs HDD storage split (HDD thumbs/encoded-video should remain empty; NVMe fills up)
+ls -la /var/lib/immich/thumbs /var/lib/immich/encoded-video
+ls -la /mnt/data/immich /mnt/data/immich/thumbs /mnt/data/immich/encoded-video
+
+# Confirm immich-server sees /mnt/data/photos read-only and has NVMe bind-mounts active
+sudo nsenter -t "$(systemctl show -p MainPID --value immich-server)" -m findmnt /mnt/data/immich/thumbs /mnt/data/immich/encoded-video /mnt/data/photos
+
+# Verify Intel QuickSync GPU usage while transcoding an uploaded video
+sudo intel_gpu_top
+```
