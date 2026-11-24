@@ -49,18 +49,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
-### T-015 — Immich photo & video management
-- **Status**: `in-progress`
-- **Depends on**: `T-006`, `T-007`, `T-012`, `T-013`
-- **Goal**: Deploy Immich natively with hybrid storage (Samba-managed family album at `/mnt/data/photos` as a read-only External Library, Immich-managed uploads & private user libraries at `/mnt/data/immich`, and database/ML/thumbnails/encoded videos on the NVMe for fast, silent browsing).
-- **Scope**:
-  - Create `modules/services/immich.nix` enabling `services.immich` (`mediaLocation = "/mnt/data/immich"`, `accelerationDevices = [ "/dev/dri/renderD128" ]`, `machine-learning.enable = true`).
-  - Keep PostgreSQL, Redis, ML cache, and bind-mounted `thumbs`/`encoded-video` (`/var/lib/immich/{thumbs,encoded-video}`) on the 1 TB NVMe.
-  - Grant `immich` access to `/dev/dri` (`video`, `render`) for Intel QuickSync video transcoding and `photos` group (`ReadOnlyPaths = [ "/mnt/data/photos" ]`) for the Samba-managed family album External Library.
-  - Add reverse proxy route `photos.<domain>` in `modules/services/immich.nix` (`younix.proxy.routes.photos`).
-- **Verification**:
-  - Deploy on `younix`, verify all services & NVMe bind mounts, configure QuickSync + `family` External Library (`/mnt/data/photos`) + Partner Sharing, and test web/mobile uploads and video transcoding.
-
 ### T-016 — Paperless-ngx document management
 - **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`
@@ -185,3 +173,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/services/jellyfin.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed native `services.jellyfin` with declarative Intel Alder Lake QuickSync (QSV) hardware transcoding (`hardwareAcceleration.type = "qsv"`, `/dev/dri/renderD128`, `forceEncodingConfig = true`, low-power H.264/HEVC encoding, OpenCL HDR tone-mapping, transcode throttling, and Alder Lake decode/encode codecs). Kept DB/metadata/caches on the 1 TB NVMe (`/var/lib/jellyfin`, `/var/cache/jellyfin`), granted `jellyfin` `video`, `render`, and `media` group memberships with boot ordering after `mnt-data.mount` and `younix-samba-dirs.service`, kept port `8096` closed in the firewall, and exposed HTTPS via Caddy (`younix.proxy.routes.jellyfin` over `tailscale0`). Verified live playback, library access, and active Intel GPU transcoding in `intel_gpu_top`.
+
+### T-015 — Immich photo & video management
+- **Status**: `done`
+- **Artifacts**: `modules/services/immich.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `flake.lock`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed native `services.immich` v3.x (pulled selectively from `nixpkgs-unstable` while keeping the base OS on `nixos-26.05`) behind Caddy HTTPS (`younix.proxy.routes.photos` over `tailscale0`). Configured hybrid storage: Samba-managed `/mnt/data/photos` exposed read-only (`ReadOnlyPaths`, `photos` group) as an External Library owned by `family` (shared via Partner Sharing), `/mnt/data/immich` on the HDD pool for Immich-managed uploads/libraries/backups, and NVMe-backed `/var/lib/immich/{thumbs,encoded-video}` projected via systemd `BindPaths` alongside NVMe PostgreSQL (VectorChord), Redis, and OpenVINO/CPU ML (`immich-machine-learning`). Enabled `/dev/dri/renderD128` (`video`, `render`, `LIBVA_DRIVER_NAME=iHD`), `zramSwap` (`zstd`, 50% RAM), and systemd CPU/I/O/RAM/OOM caps (`MemoryHigh`/`MemoryMax`) on `immich-server` and `immich-machine-learning`. Verified 16k+ photo/video library scan, ML face recognition, and resource isolation live on `younix`.
