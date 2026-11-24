@@ -491,7 +491,7 @@ sudo intel_gpu_top
 
 - **Hardware transcoding:** Declaratively managed via `services.jellyfin.hardwareAcceleration` (`type = "qsv"`, `/dev/dri/renderD128`) and `services.jellyfin.transcoding` (`forceEncodingConfig = true`, low-power H.264/HEVC encoding, OpenCL HDR tone-mapping, Alder Lake decode/encode codecs). Edit `modules/services/jellyfin.nix` rather than the web UI to persist transcoding changes across restarts.
 - **Storage layout:** SQLite DB, metadata, and trickplay/transcode caches live on the fast 1 TB NVMe (`/var/lib/jellyfin`, `/var/cache/jellyfin`); media libraries live on the HDD array (`/mnt/data/media`, accessible via the shared `media` Unix group).
-- **Network access:** Port `8096` stays closed in the firewall (`openFirewall = false`); all traffic flows over HTTPS through Caddy on `tailscale0`. If direct LAN HTTP access is ever needed for non-Tailscale smart TVs, set `services.jellyfin.openFirewall = true` (`tailscale0` remains strictly restricted to ports `22` and `443`).
+- **Network access:** Exposed over HTTPS via Caddy (`https://jellyfin.<your-delegated-subdomain>`) on `tailscale0`, and directly on the local LAN via `http://<younix-lan-ip>:8096` (`openFirewall = true`, plus UDP `7359` LAN discovery) for non-Tailscale devices like smart TVs. `tailscale0` remains strictly restricted to ports `22` and `443` (`modules/remote-access.nix`).
 
 ### One-Time First-Run Setup
 

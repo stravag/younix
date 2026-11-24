@@ -17,10 +17,10 @@
   services.jellyfin = {
     enable = true;
 
-    # Keep Jellyfin behind Caddy HTTPS (tailscale0-only). If direct LAN HTTP access
-    # (port 8096) is ever needed for non-Tailscale TVs, set this to true;
-    # modules/remote-access.nix still blocks port 8096 on tailscale0.
-    openFirewall = false;
+    # Open Jellyfin LAN ports (HTTP 8096 + UDP 7359/1900 LAN discovery) for
+    # non-Tailscale home devices such as smart TVs. Tailscale traffic remains
+    # strictly limited to HTTPS (443) via Caddy (enforced by modules/remote-access.nix).
+    openFirewall = true;
 
     # Store SQLite database, metadata, trickplay images, and transcode temp files
     # on the fast 1 TB NVMe SSD rather than the spinning HDD array.
