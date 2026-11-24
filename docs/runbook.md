@@ -573,7 +573,7 @@ sudo intel_gpu_top
 `modules/backups.nix` protects every piece of irreplaceable data and non-declarative service/host state using two coordinated nightly jobs aligned with the `04:00` SnapRAID window so sleeping HDDs wake up only once per night:
 
 - **`03:00` — Local PostgreSQL Dumps (`postgresqlBackup` + `younix-postgres-hdd-sync`)**:
-  - Runs `pg_dumpall` compressed with `zstd` (`backupAll = true`, capturing all databases, roles, and permissions — including Immich today and Paperless-ngx automatically once `T-016` is deployed) to `/var/backup/postgresql/all.sql.zst` on the 1 TB NVMe SSD.
+  - Runs `pg_dumpall` compressed with `zstd` (`backupAll = true`, capturing all databases, roles, and permissions — including Immich today and Paperless-ngx automatically once `T-016` is deployed) to `/var/backup/postgresql/all.sql.zstd` on the 1 TB NVMe SSD.
   - Immediately mirrors the dumps onto `/mnt/data/backups/postgres/` on the MergerFS HDD pool (giving local SnapRAID parity protection at `04:00` and instant local recovery if the NVMe SSD ever fails, while keeping `systemd-tmpfiles` strictly on NVMe so boot never races `/mnt/data`).
 - **`03:15` — Encrypted Offsite S3 Backup (`restic-backups-offsite` / `restic-offsite`)**:
   - Verifies `/mnt/data` is mounted (aborting with exit code `1` if unmounted so `restic` never creates an incomplete snapshot or prunes healthy snapshots).
@@ -591,7 +591,7 @@ sudo intel_gpu_top
 | `/mnt/data/documents` (documents / future Paperless originals)                           | `/var/cache/jellyfin` & `/var/lib/jellyfin/{log,metadata,transcodes}`                |
 | `/mnt/data/share` (general Samba shared files)                                           | Live `/var/lib/jellyfin/data/*.db*` (captured atomically in `/var/backup/jellyfin`)  |
 | `/mnt/data/users` (auto-included if `personalShare = true`)                              | Live `/var/lib/postgresql` & Redis (captured consistently via `pg_dumpall`)          |
-| `/mnt/data/backups/postgres` (`pg_dumpall` `.sql.zst` dumps)                             | NixOS system config & packages (declaratively rebuilt from GitHub)                   |
+| `/mnt/data/backups/postgres` (`pg_dumpall` `.sql.zstd` dumps)                            | NixOS system config & packages (declaratively rebuilt from GitHub)                   |
 | `/var/backup/jellyfin` + `/var/lib/jellyfin` (`config/`, `root/`, `plugins/`, playlists) | macOS Finder clutter (`.DS_Store`, `._*`, `.Spotlight-V100`, `.Trashes`)             |
 | `/var/lib/tailscale` (node identity — preserves `100.x.y.z` IP)                          |                                                                                      |
 | `/var/lib/caddy` (issued wildcard ACME TLS certificates)                                 |                                                                                      |
@@ -684,7 +684,7 @@ sudo systemctl stop immich-server immich-machine-learning
 #    sudo restic-offsite restore latest --target /tmp/pg-restore --include /mnt/data/backups/postgres
 
 # 3. Inspect and replay the compressed pg_dumpall archive into PostgreSQL
-zstdcat /mnt/data/backups/postgres/all.sql.zst | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
+zstdcat /mnt/data/backups/postgres/all.sql.zstd | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
 
 # 4. Start services back up
 sudo systemctl start immich-machine-learning immich-server
@@ -719,6 +719,6 @@ sudo systemctl start jellyfin
    ```bash
    sudo restic-offsite restore latest --target /
    sudo install -m 0644 -o jellyfin -g jellyfin /var/backup/jellyfin/*.db /var/lib/jellyfin/data/
-   zstdcat /mnt/data/backups/postgres/all.sql.zst | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
+   zstdcat /mnt/data/backups/postgres/all.sql.zstd | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
    ```
 4. Reboot (`sudo reboot`) and verify `tailscale status`, `caddy`, `jellyfin`, `immich-server`, and `sudo snapraid sync`.
