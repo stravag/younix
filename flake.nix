@@ -31,6 +31,7 @@
           ./modules/leds.nix
           ./modules/graphics.nix
           ./modules/storage.nix
+          ./modules/backups.nix
           ./modules/samba.nix
           ./modules/remote-access.nix
           ./modules/proxy.nix

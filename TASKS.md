@@ -66,25 +66,27 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 4 — Backups, Observability & CI
 
 ### T-017 — Local database dumps & versioned snapshots
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: `T-007`
-- **Goal**: Protect against accidental deletion or bad app updates with automated consistent DB dumps (scheduled ahead of nightly `snapraid sync`) and optional local versioned backups.
+- **Artifacts**: `modules/backups.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Goal**: Protect against accidental deletion or bad app updates with automated consistent DB dumps (scheduled ahead of nightly `restic` and `snapraid sync`).
 - **Scope**:
-  - Configure `services.postgresqlBackup` (dumping Immich & Paperless databases nightly—e.g., `03:00`, before the `04:00` SnapRAID sync—to `/mnt/data/backups/postgres`).
-  - Optionally configure a local versioned backup (e.g., local `restic` repo or `rsync --link-dest`) for `photos` and `documents` if fast local point-in-time recovery beyond SnapRAID + offsite `restic` (`T-018`) is desired.
+  - Configured `services.postgresqlBackup` (`backupAll = true`, `zstd` compression, nightly at `03:00` to `/var/backup/postgresql` on NVMe) plus `younix-postgres-hdd-sync.service` mirroring dumps to `/mnt/data/backups/postgres` on the HDD pool (ahead of `03:15` `restic` and `04:00` `snapraid sync`).
+  - Added online atomic SQLite `.backup` snapshots of Jellyfin databases (`/var/backup/jellyfin/*.db`) during `restic` pre-backup preparation.
 - **Verification**:
-  - Run backup timers manually; verify SQL dumps exist under `/mnt/data/backups/postgres` and are non-empty.
+  - Deploy and run `sudo systemctl start postgresqlBackup`; verify SQL dumps exist under `/var/backup/postgresql` and `/mnt/data/backups/postgres` and are non-empty.
 
 ### T-018 — Automated offsite backups (`restic`)
-- **Status**: `needs-decision`
+- **Status**: `in-progress`
 - **Depends on**: `T-006`, `T-007`, `T-017`
-- **Open decision**: Choose an offsite storage target (e.g., Hetzner Storage Box, Backblaze B2, Cloudflare R2, or a remote friend/family machine).
+- **Decision**: Backblaze B2 (EU Central, S3-compatible API; `restic.*` URL, encryption password, and B2 Application Key credentials encrypted via `sops-nix`).
+- **Artifacts**: `modules/backups.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
 - **Scope**:
-  - Create `modules/backups.nix` using `services.restic.backups` with repository password & credentials stored via `sops-nix`.
-  - Back up irreplaceable data (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/backups/postgres`, `/var/lib/paperless`, `/var/lib/jellyfin/data`, `/var/lib/jellyfin/config`), explicitly excluding bulk `/mnt/data/media`.
-  - Configure retention (`pruneOpts`) and periodic `checkOpts` to verify backup integrity.
+  - Created `modules/backups.nix` using `services.restic.backups.offsite` (`03:15` nightly, `initialize = true`, `createWrapper = true` → `restic-offsite`) with `restic/repository`, `restic/password`, `restic/aws_access_key_id`, and `restic/aws_secret_access_key` stored via `sops-nix`.
+  - Backs up all irreplaceable data and non-declarative service/host state (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/share`, `/mnt/data/backups/postgres`, `/var/backup/jellyfin`, `/var/lib/jellyfin`, `/var/lib/tailscale`, `/var/lib/caddy`, plus `/mnt/data/users` and `/var/lib/paperless` automatically when enabled), explicitly excluding bulk `/mnt/data/media` and regenerable caches/thumbnails.
+  - Configured mount-check guard (`mountpoint -q /mnt/data`), retention (`pruneOpts`: 7 daily / 4 weekly / 12 monthly / 3 yearly), integrity verification (`checkOpts`: `--with-cache --read-data-subset=500M`), and cgroup CPU/I/O/RAM caps (`GOMEMLIMIT=1200MiB`).
 - **Verification**:
-  - Trigger a backup run, inspect `restic snapshots`, and perform a test restore of one file to `/tmp`.
+  - Add `restic:` secrets to `secrets/secrets.yaml`, deploy, trigger `sudo systemctl start restic-backups-offsite`, inspect `sudo restic-offsite snapshots`, and perform a test restore of one file to `/tmp`.
 
 ### T-019 — System health & failure notifications
 - **Status**: `needs-decision`

@@ -302,7 +302,7 @@ sudo snapraid fix -m
 sudo snapraid -f /photos/2026/ fix
 ```
 
-*(If nightly `snapraid sync` already committed the deletion, restore the file from your offsite `restic` backup in `T-018`.)*
+*(If nightly `snapraid sync` already committed the deletion, restore the file from your offsite `restic` backup — see [Section 12: Backups & Disaster Recovery](#12-backups--disaster-recovery-postgresqlbackup--restic).)*
 
 ---
 
@@ -565,3 +565,160 @@ sudo nsenter -t "$(systemctl show -p MainPID --value immich-server)" -m findmnt 
 # Verify Intel QuickSync GPU usage while transcoding an uploaded video
 sudo intel_gpu_top
 ```
+
+---
+
+## 12. Backups & Disaster Recovery (`postgresqlBackup` + `restic`)
+
+`modules/backups.nix` protects every piece of irreplaceable data and non-declarative service/host state using two coordinated nightly jobs aligned with the `04:00` SnapRAID window so sleeping HDDs wake up only once per night:
+
+- **`03:00` — Local PostgreSQL Dumps (`postgresqlBackup` + `younix-postgres-hdd-sync`)**:
+  - Runs `pg_dumpall` compressed with `zstd` (`backupAll = true`, capturing all databases, roles, and permissions — including Immich today and Paperless-ngx automatically once `T-016` is deployed) to `/var/backup/postgresql/all.sql.zst` on the 1 TB NVMe SSD.
+  - Immediately mirrors the dumps onto `/mnt/data/backups/postgres/` on the MergerFS HDD pool (giving local SnapRAID parity protection at `04:00` and instant local recovery if the NVMe SSD ever fails, while keeping `systemd-tmpfiles` strictly on NVMe so boot never races `/mnt/data`).
+- **`03:15` — Encrypted Offsite S3 Backup (`restic-backups-offsite` / `restic-offsite`)**:
+  - Verifies `/mnt/data` is mounted (aborting with exit code `1` if unmounted so `restic` never creates an incomplete snapshot or prunes healthy snapshots).
+  - Creates atomic, online-consistent SQLite `.backup` snapshots of Jellyfin's live databases (`/var/lib/jellyfin/data/*.db` → `/var/backup/jellyfin/*.db`) without stopping Jellyfin.
+  - Encrypts client-side (AES-256 / Poly1305-AES) and uploads deduplicated chunks to an S3-compatible bucket (`initialize = true` creates the repo automatically on first run).
+  - Applies snapshot retention (`7` daily, `4` weekly, `12` monthly, `3` yearly) and verifies full index/snapshot metadata plus a random `500 MB` subset of remote pack files (`~15 GB/month` bounded egress).
+  - Cgroup-bounded (`Nice=10`, `CPUQuota=200%`, `MemoryHigh=1500M`, `MemoryMax=2500M`, `GOMEMLIMIT=1200MiB`) so large initial uploads never starve SSH, Samba, Jellyfin, or Immich.
+
+### What Is Backed Up vs. Excluded
+
+| Included (Irreplaceable & Non-Declarative)                                               | Excluded (Declarative, Bulk, or Regenerable)                                         |
+| :--------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------- |
+| `/mnt/data/photos` (Samba family photo archive)                                          | `/mnt/data/media` (bulk movies/TV/music)                                             |
+| `/mnt/data/immich` (uploads, libraries, profiles, DB dumps)                              | `/var/lib/immich/{thumbs,encoded-video}` & `/mnt/data/immich/{thumbs,encoded-video}` |
+| `/mnt/data/documents` (documents / future Paperless originals)                           | `/var/cache/jellyfin` & `/var/lib/jellyfin/{log,metadata,transcodes}`                |
+| `/mnt/data/share` (general Samba shared files)                                           | Live `/var/lib/jellyfin/data/*.db*` (captured atomically in `/var/backup/jellyfin`)  |
+| `/mnt/data/users` (auto-included if `personalShare = true`)                              | Live `/var/lib/postgresql` & Redis (captured consistently via `pg_dumpall`)          |
+| `/mnt/data/backups/postgres` (`pg_dumpall` `.sql.zst` dumps)                             | NixOS system config & packages (declaratively rebuilt from GitHub)                   |
+| `/var/backup/jellyfin` + `/var/lib/jellyfin` (`config/`, `root/`, `plugins/`, playlists) | macOS Finder clutter (`.DS_Store`, `._*`, `.Spotlight-V100`, `.Trashes`)             |
+| `/var/lib/tailscale` (node identity — preserves `100.x.y.z` IP)                          |                                                                                      |
+| `/var/lib/caddy` (issued wildcard ACME TLS certificates)                                 |                                                                                      |
+| `/var/lib/paperless` (auto-included once `T-016` is enabled)                             |                                                                                      |
+
+### Configuring or Rotating Backblaze B2 Credentials (`sops-nix`)
+
+#### One-Time Backblaze B2 (EU Central) Bucket Setup
+
+1. Create a Backblaze B2 account in the **EU Central** region (selected during sign-up).
+2. Under **Buckets → Create a Bucket**:
+   - **Files in Bucket are:** `Private`
+   - **Lifecycle Settings** *(important)*: After creating the bucket, set **Lifecycle Settings** to **`Keep only the last version of the file`** (otherwise B2 retains deleted pack versions when `restic prune` runs and bills for them indefinitely).
+   - Note the bucket's **Endpoint** (e.g., `s3.eu-central-003.backblazeb2.com`).
+3. Under **Application Keys → Add a New Application Key**:
+   - Scope it to **only** your backup bucket (`Allow access to Bucket(s): <bucket-name>`), **Read and Write** (never use the Master Application Key).
+   - Copy the generated **`keyID`** and **`applicationKey`** immediately (the `applicationKey` is shown only once).
+
+#### Adding Secrets to `secrets/secrets.yaml` (on macOS)
+
+Generate a strong repository encryption password on your Mac (`openssl rand -base64 32`), then add the `restic` block to `secrets/secrets.yaml`:
+
+```bash
+sops secrets/secrets.yaml
+```
+
+```yaml
+restic:
+  repository: s3:https://s3.eu-central-003.backblazeb2.com/<bucket-name>
+  password: <strong-random-restic-encryption-password>
+  aws_access_key_id: <b2-keyID>
+  aws_secret_access_key: <b2-applicationKey>
+```
+
+*(Restic's S3 backend expects the standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` variable names even when talking to Backblaze B2.)*
+
+> **Important — Password Manager Backup:** Save a copy of your `restic` `repository`, `password`, and Backblaze B2 Application Key in your password manager alongside `/etc/keys/hdd.key`, `/etc/keys/sops.key`, and your macOS `age` key. If `younix` and your home are ever lost simultaneously (fire/theft), you need those credentials to decrypt and restore directly from Backblaze B2 onto a new machine.
+
+### Operations & Verification Cheatsheet
+
+NixOS installs a pre-authenticated `restic-offsite` wrapper (`sudo restic-offsite ...`) that automatically loads `/run/secrets/restic/*` and `/run/secrets/rendered/restic-offsite.env`:
+
+```bash
+# Check scheduled backup timers (03:00 PostgreSQL, 03:15 offsite restic)
+systemctl list-timers 'postgresqlBackup*' 'restic-backups-*'
+
+# Trigger a consistent PostgreSQL dump + HDD mirror manually
+sudo systemctl start postgresqlBackup
+ls -lh /var/backup/postgresql /mnt/data/backups/postgres
+
+# Trigger an immediate offsite backup + retention prune + 500 MB integrity check
+# (Run inside tmux on the very first run if uploading a large photo library)
+sudo systemctl start restic-backups-offsite
+journalctl -u restic-backups-offsite -f
+
+# Inspect remote snapshots, repository size, and contents
+sudo restic-offsite snapshots
+sudo restic-offsite stats
+sudo restic-offsite ls latest | head -n 40
+
+# Run a full remote data-pack verification on demand (downloads all packs)
+sudo restic-offsite check --read-data
+```
+
+### Restore Procedures
+
+#### 1. Restore a Specific File or Folder (Non-Destructive Test or Accidental Deletion)
+
+```bash
+# Search snapshots for a filename or path
+sudo restic-offsite find "IMG_1234*"
+
+# Restore a single file or directory from the latest snapshot into /tmp/restore-test
+sudo rm -rf /tmp/restore-test
+sudo restic-offsite restore latest \
+  --target /tmp/restore-test \
+  --include "/mnt/data/photos"
+ls -la /tmp/restore-test/mnt/data/photos
+```
+
+*(Replace `latest` with any specific snapshot ID from `sudo restic-offsite snapshots` to restore an older point-in-time version.)*
+
+#### 2. Restore PostgreSQL Databases (Immich / Paperless)
+
+```bash
+# 1. Stop dependent apps so no active connections hold locks
+sudo systemctl stop immich-server immich-machine-learning
+
+# 2. If restoring from S3 rather than local /mnt/data/backups/postgres:
+#    sudo restic-offsite restore latest --target /tmp/pg-restore --include /mnt/data/backups/postgres
+
+# 3. Inspect and replay the compressed pg_dumpall archive into PostgreSQL
+zstdcat /mnt/data/backups/postgres/all.sql.zst | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
+
+# 4. Start services back up
+sudo systemctl start immich-machine-learning immich-server
+```
+
+#### 3. Restore Jellyfin State & SQLite Databases
+
+```bash
+sudo systemctl stop jellyfin
+
+# Restore /var/lib/jellyfin and atomic SQLite snapshots (/var/backup/jellyfin) in place
+sudo restic-offsite restore latest \
+  --target / \
+  --include /var/lib/jellyfin \
+  --include /var/backup/jellyfin
+
+# Copy the atomic SQLite snapshots back into Jellyfin's data directory
+sudo rm -f /var/lib/jellyfin/data/*.db-wal /var/lib/jellyfin/data/*.db-shm
+sudo install -m 0644 -o jellyfin -g jellyfin /var/backup/jellyfin/*.db /var/lib/jellyfin/data/
+
+sudo systemctl start jellyfin
+```
+
+#### 4. Full Bare-Metal Disaster Recovery (Total NVMe + HDD Loss)
+
+1. Follow the [Bootstrap Guide](bootstrap.md) to install NixOS from `github:stravag/younix#younix`, restore `/etc/keys/hdd.key` and `/etc/keys/sops.key` from your password manager ([Section 4](#4-keyfile-recovery-if-the-1-tb-nvme-is-reinstalled)), and mount the new MergerFS `/mnt/data` pool.
+2. Stop stateful app services before restoring data over `/var/lib` and `/mnt/data`:
+   ```bash
+   sudo systemctl stop immich-server immich-machine-learning jellyfin caddy tailscaled
+   ```
+3. Restore the full snapshot into `/` (inside `tmux`):
+   ```bash
+   sudo restic-offsite restore latest --target /
+   sudo install -m 0644 -o jellyfin -g jellyfin /var/backup/jellyfin/*.db /var/lib/jellyfin/data/
+   zstdcat /mnt/data/backups/postgres/all.sql.zst | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
+   ```
+4. Reboot (`sudo reboot`) and verify `tailscale status`, `caddy`, `jellyfin`, `immich-server`, and `sudo snapraid sync`.
