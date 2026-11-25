@@ -28,6 +28,7 @@
           ./modules/gitops.nix
           ./modules/secrets.nix
           ./modules/thermals.nix
+          ./modules/power.nix
           ./modules/leds.nix
           ./modules/graphics.nix
           ./modules/storage.nix
