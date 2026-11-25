@@ -122,7 +122,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ### T-023 — Enhanced front-panel LED states (standby color & status feedback)
 - **Status**: `in-progress`
 - **Depends on**: `T-004`, `T-008`
-- **Decision**: Active bays white (`32/255`) + I/O blink, spun-down standby bays dim blue (`0 100 255` @ `10/255`), SMART/offline fault red (`255 0 0` @ `32/255`), Power LED steady white (`32/255`) normally and steady amber (`255 120 0` @ `32/255`) when any configured array mountpoint is missing.
+- **Decision**: Active bays white + I/O blink, spun-down standby bays blue, SMART/offline fault red, Power LED steady white normally and steady amber when any configured array mountpoint is missing.
 - **Goal**: Make `younix-leds` (`modules/leds.nix`) convey richer hardware state at a glance—such as changing bay LED color/brightness when a drive is spun down (`hdparm -C` standby check without waking sleeping HDDs).
 - **Scope**:
   - [x] Extend `younix-leds` in `modules/leds.nix` to detect drive power state (standby vs active/idle) using standby-safe polling (`hdparm -C`) and reflect it via bay LED RGB color/brightness.

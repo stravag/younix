@@ -8,8 +8,10 @@ For initial one-time OS and disk setup, see the [Bootstrap Guide](bootstrap.md).
 ## 1. Day-to-Day GitOps Workflow (`comin`)
 
 1. Edit Nix files locally on your Mac, commit, and `git push` to `main`.
-2. `comin` on `younix` polls `origin/main` every **1 hour** (`3600s` in `modules/gitops.nix`), builds the new system, and switches to it automatically.
-3. For risky changes (storage, networking, firewall, SSH, bootloader), push to branch **`testing-younix`** instead—`comin` activates it temporarily (`test` mode), so a reboot automatically reverts to `main`.
+2. `comin` on `younix` polls `origin/main` every **1 hour** (`3600s` in `modules/gitops.nix`), builds the new system,
+   and switches to it automatically.
+3. For risky changes (storage, networking, firewall, SSH, bootloader), push to branch **`testing-younix`** instead—
+   `comin` activates it temporarily (`test` mode), so a reboot automatically reverts to `main`.
 
 ```bash
 # Connect from macOS
@@ -54,9 +56,14 @@ for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -n standby -H -l selftest
 
 ### Disk Health (`smartd`) & HDD Spindown (`hd-idle`)
 
-- **`smartd`** monitors all SATA HDDs and NVMe SSDs (`DEVICESCAN`), runs weekly **Short** self-tests (Saturday `04:xx`) and monthly **Long** self-tests (1st of the month `04:xx`, aligned with the `04:00` SnapRAID sync window while HDDs are awake), and uses `-n standby,q` so routine 30-minute polls never spin up sleeping drives.
-- **`hd-idle`** spins down idle array HDDs after **30 minutes** (`1800s`) via ATA standby commands (`-c ata`), leaving NVMe SSDs and USB devices untouched (`-i 0`). `younix-leds` (`smartctl -n standby`) and `smartd` (`-n standby,q`) are standby-safe and will not wake sleeping drives.
-- If you run a **manual Long SMART self-test** (`sudo smartctl -t long /dev/sdX`, ~8–9 h on 4 TB WD Red Plus), pause `hd-idle` while it runs so standby commands don't interrupt it:
+- **`smartd`** monitors all SATA HDDs and NVMe SSDs (`DEVICESCAN`), runs weekly **Short** self-tests (Saturday `04:xx`)
+  and monthly **Long** self-tests (1st of the month `04:xx`, aligned with the `04:00` SnapRAID sync window while HDDs
+  are awake), and uses `-n standby,q` so routine 30-minute polls never spin up sleeping drives.
+- **`hd-idle`** spins down idle array HDDs after **30 minutes** (`1800s`) via ATA standby commands (`-c ata`), leaving
+  NVMe SSDs and USB devices untouched (`-i 0`). `younix-leds` (`smartctl -n standby`) and `smartd` (`-n standby,q`) are
+  standby-safe and will not wake sleeping drives.
+- If you run a **manual Long SMART self-test** (`sudo smartctl -t long /dev/sdX`, ~8–9 h on 4 TB WD Red Plus), pause
+  `hd-idle` while it runs so standby commands don't interrupt it:
   ```bash
   sudo systemctl stop hd-idle
   sudo smartctl -t long /dev/sdX
@@ -66,13 +73,15 @@ for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -n standby -H -l selftest
 
 ### When Automated Sync Aborts (`snapraid-precheck` Delete Threshold)
 
-`snapraid-precheck.service` automatically aborts nightly `snapraid sync` if **more than 100 files** were deleted since the last sync, protecting your parity against accidental `rm -rf` or app bugs.
+`snapraid-precheck.service` automatically aborts nightly `snapraid sync` if **more than 100 files** were deleted since
+the last sync, protecting your parity against accidental `rm -rf` or app bugs.
 
 1. Inspect what changed:
    ```bash
    sudo snapraid diff
    ```
-2. **If the deletions were accidental:** Jump to [Scenario 3: Recovering Accidentally Deleted Files](#scenario-3--recovering-accidentally-deleted-files-before-nightly-sync).
+2. **If the deletions were accidental:** Jump
+   to [Scenario 3: Recovering Accidentally Deleted Files](#scenario-3--recovering-accidentally-deleted-files-before-nightly-sync).
 3. **If the deletions were intentional** (e.g., cleaning up old media): Run a manual sync once to commit them to parity:
    ```bash
    sudo snapraid sync
@@ -84,8 +93,10 @@ for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -n standby -H -l selftest
 ## 3. Secrets Management (`sops-nix`)
 
 Encrypted secrets live in `secrets/secrets.yaml` and are encrypted with `age` for two recipients listed in `.sops.yaml`:
+
 - Your macOS admin key (`~/Library/Application Support/sops/age/keys.txt`) — used to view and edit secrets locally.
-- `younix`'s host key (`/etc/keys/sops.key`) — used by `sops-nix` to decrypt secrets into in-memory `/run/secrets/<name>` at boot/activation.
+- `younix`'s host key (`/etc/keys/sops.key`) — used by `sops-nix` to decrypt secrets into in-memory
+  `/run/secrets/<name>` at boot/activation.
 
 ### Day-to-Day: Adding or Editing Secrets (on macOS)
 
@@ -98,8 +109,10 @@ sops --decrypt secrets/secrets.yaml
 ```
 
 To expose a secret to a NixOS service:
+
 1. Add the key/value inside `sops secrets/secrets.yaml`.
-2. Declare it in the relevant module (e.g., `sops.secrets.<name> = { owner = "..."; };`) and point the service's `*File` / `environmentFile` option at `config.sops.secrets.<name>.path`.
+2. Declare it in the relevant module (e.g., `sops.secrets.<name> = { owner = "..."; };`) and point the service's
+   `*File` / `environmentFile` option at `config.sops.secrets.<name>.path`.
 3. Commit and push; verify on `younix` with `sudo ls -la /run/secrets/`.
 
 ### Re-keying After Rotating Keys
@@ -114,7 +127,9 @@ sops updatekeys secrets/secrets.yaml
 
 ## 4. Keyfile Recovery (If the 1 TB NVMe Is Reinstalled)
 
-Both `/etc/keys/hdd.key` (LUKS2 HDD encryption) and `/etc/keys/sops.key` (`sops-nix` decryption) live on the 1 TB NVMe SSD and are backed up in your password manager. If you ever reinstall NixOS on a replacement NVMe SSD, restore both keyfiles from your password manager:
+Both `/etc/keys/hdd.key` (LUKS2 HDD encryption) and `/etc/keys/sops.key` (`sops-nix` decryption) live on the 1 TB NVMe
+SSD and are backed up in your password manager. If you ever reinstall NixOS on a replacement NVMe SSD, restore both
+keyfiles from your password manager:
 
 ### Restore `/etc/keys/hdd.key` (before unlocking/mounting HDDs)
 
@@ -165,7 +180,8 @@ for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -H "$d"; done
 dmesg -T | grep -iE 'ata|sd[a-z]|ext4|i/o error' | tail -n 40
 ```
 
-> **Before touching anything:** Pause the nightly SnapRAID sync timer during active recovery so parity is never overwritten while a drive is missing or empty:
+> **Before touching anything:** Pause the nightly SnapRAID sync timer during active recovery so parity is never
+> overwritten while a drive is missing or empty:
 > ```bash
 > sudo systemctl stop snapraid-sync.timer
 > ```
@@ -174,9 +190,12 @@ dmesg -T | grep -iE 'ata|sd[a-z]|ext4|i/o error' | tail -n 40
 
 ### Scenario 1 — Replacing a Failed Data Drive (`d1`, `d2`, or `d3`)
 
-Because `modules/storage.nix` uses `PARTLABEL` (`LUKS-DATA1`, `LUKS-DATA2`, `LUKS-DATA3`), **no Git changes are needed** when replacing a failed drive with one of equal or larger size *(note: any data drive must remain ≤ the parity drive size)*.
+Because `modules/storage.nix` uses `PARTLABEL` (`LUKS-DATA1`, `LUKS-DATA2`, `LUKS-DATA3`), **no Git changes are needed**
+when replacing a failed drive with one of equal or larger size *(note: any data drive must remain ≤ the parity drive
+size)*.
 
-In the commands below, adjust `N` (`1`, `2`, or `3`) to match the failed data drive (`d1` → `1`, `d2` → `2`, `d3` → `3`).
+In the commands below, adjust `N` (`1`, `2`, or `3`) to match the failed data drive (`d1` → `1`, `d2` → `2`, `d3` →
+`3`).
 
 1. **Power down and physically replace the failed drive:**
    ```bash
@@ -218,7 +237,8 @@ In the commands below, adjust `N` (`1`, `2`, or `3`) to match the failed data dr
    # Preview/recover everything belonging to dN and save a recovery log
    sudo snapraid -d "d${N}" -l /tmp/snapraid-fix.log fix
    ```
-   *(Depending on how full the 4 TB drive was, this can take several hours—run it inside `tmux` so an SSH disconnect won't interrupt it.)*
+   *(Depending on how full the 4 TB drive was, this can take several hours—run it inside `tmux` so an SSH disconnect
+   won't interrupt it.)*
 
 6. **Verify recovered data, refresh MergerFS, and re-enable nightly sync:**
    ```bash
@@ -240,7 +260,8 @@ In the commands below, adjust `N` (`1`, `2`, or `3`) to match the failed data dr
 
 ### Scenario 2 — Replacing a Failed Parity Drive (`PARITY1`)
 
-A parity drive failure loses **zero user data**—your files remain intact on the data drives, you just have no parity redundancy until the replacement is synced.
+A parity drive failure loses **zero user data**—your files remain intact on the data drives, you just have no parity
+redundancy until the replacement is synced.
 
 > **Important:** The replacement parity drive must be **at least as large as your largest data drive**.
 
@@ -302,7 +323,8 @@ sudo snapraid fix -m
 sudo snapraid -f /photos/2026/ fix
 ```
 
-*(If nightly `snapraid sync` already committed the deletion, restore the file from your offsite `restic` backup — see [Section 12: Backups & Disaster Recovery](#12-backups--disaster-recovery-postgresqlbackup--restic).)*
+*(If nightly `snapraid sync` already committed the deletion, restore the file from your offsite `restic` backup —
+see [Section 12: Backups & Disaster Recovery](#12-backups--disaster-recovery-postgresqlbackup--restic).)*
 
 ---
 
@@ -322,18 +344,23 @@ sudo snapraid -p bad scrub
 sudo snapraid status
 ```
 
-If the same drive repeatedly develops bad blocks, check `sudo smartctl -a /dev/sdX`—it is likely beginning to fail and should be proactively replaced using [Scenario 1](#scenario-1--replacing-a-failed-data-drive-d1-d2-or-d3) or [Scenario 2](#scenario-2--replacing-a-failed-parity-drive-parity1).
+If the same drive repeatedly develops bad blocks, check `sudo smartctl -a /dev/sdX`—it is likely beginning to fail and
+should be proactively replaced using [Scenario 1](#scenario-1--replacing-a-failed-data-drive-d1-d2-or-d3)
+or [Scenario 2](#scenario-2--replacing-a-failed-parity-drive-parity1).
 
 ---
 
 ## 6. File Sharing (Samba)
 
-SMB3 shares are managed declaratively in `modules/samba.nix` with macOS Finder optimizations (`vfs_fruit` + `streams_xattr`), Avahi/Bonjour discovery, WSDD (Windows discovery), and declarative password provisioning via `sops-nix`.
+SMB3 shares are managed declaratively in `modules/samba.nix` with macOS Finder optimizations (`vfs_fruit` +
+`streams_xattr`), Avahi/Bonjour discovery, WSDD (Windows discovery), and declarative password provisioning via
+`sops-nix`.
 
 ### Connecting from macOS
 
 1. Open **Finder** → **Locations / Network** → **`younix`** (or press **`Cmd + K`** and enter `smb://younix.local`).
-2. Connect as **Registered User** with your username (e.g. `ranil`) and the matching password under `samba_passwords.<username>` in `secrets/secrets.yaml`.
+2. Connect as **Registered User** with your username (e.g. `ranil`) and the matching password under
+   `samba_passwords.<username>` in `secrets/secrets.yaml`.
 
 ### Setting or Rotating a Samba Password
 
@@ -348,12 +375,17 @@ samba_passwords:
   ranil: your-strong-samba-password
 ```
 
-Commit and push; when `comin` deploys, `sops-nix` automatically restarts `younix-samba-passwd.service` to update Samba's password database.
+Commit and push; when `comin` deploys, `sops-nix` automatically restarts `younix-samba-passwd.service` to update Samba's
+password database.
 
 ### Adding a New Share or Family Member
 
-- **New shared folder:** Add an entry under `sharedFolders` in `modules/samba.nix` and include its name in each user's `shares` list under `sambaUsers` (its Unix group, `2770` directory permissions, and `smb.conf` section are created automatically).
-- **New family member:** Define their NixOS account in `hosts/younix/configuration.nix`, add `samba_passwords.<name>` via `sops secrets/secrets.yaml`, and add them to `sambaUsers` in `modules/samba.nix` (set `personalShare = true` for a private `/mnt/data/users/<name>` folder).
+- **New shared folder:** Add an entry under `sharedFolders` in `modules/samba.nix` and include its name in each user's
+  `shares` list under `sambaUsers` (its Unix group, `2770` directory permissions, and `smb.conf` section are created
+  automatically).
+- **New family member:** Define their NixOS account in `hosts/younix/configuration.nix`, add `samba_passwords.<name>`
+  via `sops secrets/secrets.yaml`, and add them to `sambaUsers` in `modules/samba.nix` (set `personalShare = true` for a
+  private `/mnt/data/users/<name>` folder).
 
 ### Diagnostics
 
@@ -374,7 +406,11 @@ ls -ld /mnt/data/media /mnt/data/photos
 
 ## 7. Remote Access (Tailscale)
 
-Remote access is provided by `modules/remote-access.nix` using **Tailscale** (outbound-only WireGuard mesh — zero router port-forwarding). To minimize the attack surface, `tailscale0` is **not** a trusted interface: a dedicated `younix-tailscale-in` firewall chain allows only explicitly allowlisted `tailscale0` ports (`22` for SSH, and `443` once `modules/proxy.nix` is deployed) plus ICMP echo, keeping LAN services (Samba `445/139`, WSDD, Avahi) unreachable over Tailscale.
+Remote access is provided by `modules/remote-access.nix` using **Tailscale** (outbound-only WireGuard mesh — zero router
+port-forwarding). To minimize the attack surface, `tailscale0` is **not** a trusted interface: a dedicated
+`younix-tailscale-in` firewall chain allows only explicitly allowlisted `tailscale0` ports (`22` for SSH, and `443` once
+`modules/proxy.nix` is deployed) plus ICMP echo, keeping LAN services (Samba `445/139`, WSDD, Avahi) unreachable over
+Tailscale.
 
 ### One-Time Enrollment (Interactive, No Auth Keys in Git)
 
@@ -384,9 +420,11 @@ After deploying `modules/remote-access.nix` to `younix`, authenticate interactiv
 sudo tailscale up --ssh=false --accept-routes=false --accept-dns=false
 ```
 
-- `--ssh=false`: Keeps SSH strictly bound to OpenSSH + your `ed25519` key (a compromised Tailscale login alone cannot shell into `younix`).
+- `--ssh=false`: Keeps SSH strictly bound to OpenSSH + your `ed25519` key (a compromised Tailscale login alone cannot
+  shell into `younix`).
 - `--accept-routes=false`: Prevents other nodes from injecting routes into `younix`.
-- `--accept-dns=false`: Keeps `younix`'s local DNS resolution untouched (important for LAN mDNS and Caddy DNS-01 queries).
+- `--accept-dns=false`: Keeps `younix`'s local DNS resolution untouched (important for LAN mDNS and Caddy DNS-01
+  queries).
 
 Open the printed login URL in your browser to authorize `younix`, then record its private Tailscale IPv4 address:
 
@@ -397,10 +435,15 @@ tailscale ip -4
 
 ### Recommended Tailscale Admin Console Hardening
 
-1. **Device Approval:** Enable *Device approval* under **Settings → Device management** so no new device can join your tailnet without explicit admin approval.
-2. **Key Expiry:** Disable key expiry **only** on `younix` (so the headless NAS stays online unattended); keep key expiry enabled on personal laptops and phones.
-3. **Least-Privilege ACLs / Grants:** Restrict access in **Access Controls** so only your admin Mac can reach `younix:22` (SSH), while phones/family devices can only reach `younix:443` (HTTPS). Keep **Tailscale Funnel** disabled.
-4. **Tailnet Lock (Optional):** Enable Tailnet Lock for cryptographic node-key signing if you want zero trust in Tailscale's control plane.
+1. **Device Approval:** Enable *Device approval* under **Settings → Device management** so no new device can join your
+   tailnet without explicit admin approval.
+2. **Key Expiry:** Disable key expiry **only** on `younix` (so the headless NAS stays online unattended); keep key
+   expiry enabled on personal laptops and phones.
+3. **Least-Privilege ACLs / Grants:** Restrict access in **Access Controls** so only your admin Mac can reach
+   `younix:22` (SSH), while phones/family devices can only reach `younix:443` (HTTPS). Keep **Tailscale Funnel**
+   disabled.
+4. **Tailnet Lock (Optional):** Enable Tailnet Lock for cryptographic node-key signing if you want zero trust in
+   Tailscale's control plane.
 
 ### Diagnostics
 
@@ -419,11 +462,16 @@ sudo ip6tables -L younix-tailscale-in -n -v
 
 ## 8. Reverse Proxy & HTTPS (Caddy + deSEC DNS-01)
 
-`modules/proxy.nix` runs **Caddy** built with `github.com/caddy-dns/desec` to serve all future web apps over HTTPS using a single wildcard Let's Encrypt certificate (`*.<domain>`):
+`modules/proxy.nix` runs **Caddy** built with `github.com/caddy-dns/desec` to serve all future web apps over HTTPS using
+a single wildcard Let's Encrypt certificate (`*.<domain>`):
 
-- **Zero public ports:** DNS-01 validation updates `_acme-challenge` TXT records via the deSEC API; port `443` is exposed strictly on `tailscale0` (never LAN or WAN).
-- **Private domain & credentials:** Both `caddy.domain` and `caddy.desec_token` live encrypted in `secrets/secrets.yaml` and are rendered at runtime into `/run/secrets/rendered/caddy.env`.
-- **Adding a new service route:** Any NixOS service module simply declares `younix.proxy.routes.<subdomain>.upstream = "127.0.0.1:<port>";` (with optional `extraConfig`) to inherit the wildcard TLS cert and security headers automatically.
+- **Zero public ports:** DNS-01 validation updates `_acme-challenge` TXT records via the deSEC API; port `443` is
+  exposed strictly on `tailscale0` (never LAN or WAN).
+- **Private domain & credentials:** Both `caddy.domain` and `caddy.desec_token` live encrypted in `secrets/secrets.yaml`
+  and are rendered at runtime into `/run/secrets/rendered/caddy.env`.
+- **Adding a new service route:** Any NixOS service module simply declares
+  `younix.proxy.routes.<subdomain>.upstream = "127.0.0.1:<port>";` (with optional `extraConfig`) to inherit the wildcard
+  TLS cert and security headers automatically.
 
 ### Updating Caddy Secrets
 
@@ -457,12 +505,15 @@ sudo iptables -L younix-tailscale-in -n -v
 
 ## 9. Intel QuickSync Hardware Acceleration
 
-`modules/graphics.nix` exposes the UGREEN DXP4800 Plus's Intel Alder Lake iGPU (Pentium Gold 8505, `/dev/dri/renderD128`) for native hardware video transcoding and tone-mapping:
+`modules/graphics.nix` exposes the UGREEN DXP4800 Plus's Intel Alder Lake iGPU (Pentium Gold 8505,
+`/dev/dri/renderD128`) for native hardware video transcoding and tone-mapping:
 
 - **VA-API (`intel-media-driver` / `iHD`)**: Hardware decode (H.264, HEVC, VP9, AV1) and encode (H.264, HEVC, VP9).
 - **oneVPL (`vpl-gpu-rt`)**: Intel QuickSync Video (QSV) runtime for Gen 12+ media pipelines (Jellyfin, Immich).
-- **OpenCL (`intel-compute-runtime`)**: NEO OpenCL/Level Zero runtime for hardware HDR-to-SDR tone-mapping and subtitle burn-in filters.
-- **Permissions**: Any service using `/dev/dri/renderD128` must belong to the `video` and `render` Unix groups (already granted to `ranil` for interactive diagnostics).
+- **OpenCL (`intel-compute-runtime`)**: NEO OpenCL/Level Zero runtime for hardware HDR-to-SDR tone-mapping and subtitle
+  burn-in filters.
+- **Permissions**: Any service using `/dev/dri/renderD128` must belong to the `video` and `render` Unix groups (already
+  granted to `ranil` for interactive diagnostics).
 
 ### Diagnostics
 
@@ -487,16 +538,27 @@ sudo intel_gpu_top
 
 ## 10. Jellyfin Media Server
 
-`modules/services/jellyfin.nix` deploys Jellyfin natively behind Caddy HTTPS (`https://jellyfin.<your-delegated-subdomain>`, Tailscale-only) with Intel QuickSync (QSV) hardware transcoding:
+`modules/services/jellyfin.nix` deploys Jellyfin natively behind Caddy HTTPS
+(`https://jellyfin.<your-delegated-subdomain>`, Tailscale-only) with Intel QuickSync (QSV) hardware transcoding:
 
-- **Hardware transcoding:** Declaratively managed via `services.jellyfin.hardwareAcceleration` (`type = "qsv"`, `/dev/dri/renderD128`) and `services.jellyfin.transcoding` (`forceEncodingConfig = true`, low-power H.264/HEVC encoding, OpenCL HDR tone-mapping, Alder Lake decode/encode codecs). Edit `modules/services/jellyfin.nix` rather than the web UI to persist transcoding changes across restarts.
-- **Storage layout:** SQLite DB, metadata, and trickplay/transcode caches live on the fast 1 TB NVMe (`/var/lib/jellyfin`, `/var/cache/jellyfin`); media libraries live on the HDD array (`/mnt/data/media`, accessible via the shared `media` Unix group).
-- **Network access:** Exposed over HTTPS via Caddy (`https://jellyfin.<your-delegated-subdomain>`) on `tailscale0`, and directly on the local LAN via `http://<younix-lan-ip>:8096` (`openFirewall = true`, plus UDP `7359` LAN discovery) for non-Tailscale devices like smart TVs. `tailscale0` remains strictly restricted to ports `22` and `443` (`modules/remote-access.nix`).
+- **Hardware transcoding:** Declaratively managed via `services.jellyfin.hardwareAcceleration` (`type = "qsv"`,
+  `/dev/dri/renderD128`) and `services.jellyfin.transcoding` (`forceEncodingConfig = true`, low-power H.264/HEVC
+  encoding, OpenCL HDR tone-mapping, Alder Lake decode/encode codecs). Edit `modules/services/jellyfin.nix` rather than
+  the web UI to persist transcoding changes across restarts.
+- **Storage layout:** SQLite DB, metadata, and trickplay/transcode caches live on the fast 1 TB NVMe
+  (`/var/lib/jellyfin`, `/var/cache/jellyfin`); media libraries live on the HDD array (`/mnt/data/media`, accessible via
+  the shared `media` Unix group).
+- **Network access:** Exposed over HTTPS via Caddy (`https://jellyfin.<your-delegated-subdomain>`) on `tailscale0`, and
+  directly on the local LAN via `http://<younix-lan-ip>:8096` (`openFirewall = true`, plus UDP `7359` LAN discovery) for
+  non-Tailscale devices like smart TVs. `tailscale0` remains strictly restricted to ports `22` and `443`
+  (`modules/remote-access.nix`).
 
 ### One-Time First-Run Setup
 
-1. Open `https://jellyfin.<your-delegated-subdomain>` from a Tailscale-connected device and complete the initial setup wizard (create your admin account and add media libraries pointing at `/mnt/data/media/...`).
-2. Under **Dashboard → Networking → Known Proxies**, add `127.0.0.1,::1` and save (then restart `jellyfin.service` if prompted) so activity logs record real client Tailscale IPs rather than `127.0.0.1`.
+1. Open `https://jellyfin.<your-delegated-subdomain>` from a Tailscale-connected device and complete the initial setup
+   wizard (create your admin account and add media libraries pointing at `/mnt/data/media/...`).
+2. Under **Dashboard → Networking → Known Proxies**, add `127.0.0.1,::1` and save (then restart `jellyfin.service` if
+   prompted) so activity logs record real client Tailscale IPs rather than `127.0.0.1`.
 
 ### Diagnostics & Transcoding Verification
 
@@ -520,29 +582,56 @@ sudo intel_gpu_top
 
 ## 11. Immich Photo & Video Server
 
-`modules/services/immich.nix` deploys Immich natively (pulled from `nixpkgs-unstable` for current v3.x releases while the base OS stays on stable `nixos-26.05`) behind Caddy HTTPS (`https://photos.<your-delegated-subdomain>`, Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video transcoding:
+`modules/services/immich.nix` deploys Immich natively (pulled from `nixpkgs-unstable` for current v3.x releases while
+the base OS stays on stable `nixos-26.05`) behind Caddy HTTPS (`https://photos.<your-delegated-subdomain>`,
+Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video transcoding:
 
 - **Hybrid storage layout:**
-  - `/mnt/data/photos` — Clean, human-organized **Family Album** managed via Samba (`modules/samba.nix`), exposed strictly **read-only** (`ReadOnlyPaths`) to `immich-server` (via the `photos` Unix group) for indexing as an **External Library**.
-  - `/mnt/data/immich` — Immich-managed `mediaLocation` on the MergerFS HDD pool (not exposed over Samba) holding mobile/web uploads (`upload/`, `library/`), profile avatars (`profile/`), and Immich DB dumps (`backups/`).
-  - `/var/lib/immich/{thumbs,encoded-video}` — Fast NVMe cache projected onto `/mnt/data/immich/{thumbs,encoded-video}` inside `immich-server`'s mount namespace via systemd `BindPaths`. The underlying HDD folders stay empty (avoiding SnapRAID churn and offsite backup bloat), and timeline browsing / transcoded playback never wake sleeping HDDs.
-  - PostgreSQL (with vector extension), Valkey/Redis, and ML models (`immich-machine-learning`) all run on the 1 TB NVMe SSD.
-- **Hardware acceleration:** `/dev/dri/renderD128` is exposed via `services.immich.accelerationDevices` + `video`/`render` group memberships and `LIBVA_DRIVER_NAME=iHD`.
-- **Resource isolation:** Both `immich-server` (`Nice=10`, `CPUQuota=400%`, `MemoryHigh=2500M`, `MemoryMax=3500M`, `OOMScoreAdjust=300`) and `immich-machine-learning` (`Nice=15`, `IOSchedulingClass=idle`, `CPUQuota=300%`, `MemoryHigh=2G`, `MemoryMax=3G`, `OOMScoreAdjust=500`) are cgroup-bounded alongside `zramSwap` (`zstd`, 50% RAM) so bulk imports never starve SSH or OOM-kill Jellyfin.
-- **Mount safety:** `younix-immich-dirs.service` creates directories and `.immich` sentinel files only when `/mnt/data` is mounted, and `immich-server.service` uses `ConditionPathIsMountPoint=/mnt/data` so a degraded HDD array never writes uploads to the root NVMe.
+    - `/mnt/data/photos` — Clean, human-organized **Family Album** managed via Samba (`modules/samba.nix`), exposed
+      strictly **read-only** (`ReadOnlyPaths`) to `immich-server` (via the `photos` Unix group) for indexing as an
+      **External Library**.
+    - `/mnt/data/immich` — Immich-managed `mediaLocation` on the MergerFS HDD pool (not exposed over Samba) holding
+      mobile/web uploads (`upload/`, `library/`), profile avatars (`profile/`), and Immich DB dumps (`backups/`).
+    - `/var/lib/immich/{thumbs,encoded-video}` — Fast NVMe cache projected onto
+      `/mnt/data/immich/{thumbs,encoded-video}` inside `immich-server`'s mount namespace via systemd `BindPaths`. The
+      underlying HDD folders stay empty (avoiding SnapRAID churn and offsite backup bloat), and timeline browsing /
+      transcoded playback never wake sleeping HDDs.
+    - PostgreSQL (with vector extension), Valkey/Redis, and ML models (`immich-machine-learning`) all run on the 1 TB
+      NVMe SSD.
+- **Hardware acceleration:** `/dev/dri/renderD128` is exposed via `services.immich.accelerationDevices` + `video`/
+  `render` group memberships and `LIBVA_DRIVER_NAME=iHD`.
+- **Resource isolation:** Both `immich-server` (`Nice=10`, `CPUQuota=400%`, `MemoryHigh=2500M`, `MemoryMax=3500M`,
+  `OOMScoreAdjust=300`) and `immich-machine-learning` (`Nice=15`, `IOSchedulingClass=idle`, `CPUQuota=300%`,
+  `MemoryHigh=2G`, `MemoryMax=3G`, `OOMScoreAdjust=500`) are cgroup-bounded alongside `zramSwap` (`zstd`, 50% RAM) so
+  bulk imports never starve SSH or OOM-kill Jellyfin.
+- **Mount safety:** `younix-immich-dirs.service` creates directories and `.immich` sentinel files only when `/mnt/data`
+  is mounted, and `immich-server.service` uses `ConditionPathIsMountPoint=/mnt/data` so a degraded HDD array never
+  writes uploads to the root NVMe.
 
 ### One-Time First-Run Setup (Family Album + Private Albums)
 
-1. **Create your admin account:** Open `https://photos.<your-delegated-subdomain>` from a Tailscale-connected device and register your personal admin account (e.g., Ranil).
-2. **Enable Intel QuickSync transcoding:** Under **Administration → Settings → Video Transcoding Settings**, select **Hardware Acceleration: Quick Sync** (device `/dev/dri/renderD128`) and enable hardware decoding.
-3. **Enable Storage Template (recommended):** Under **Administration → Settings → Storage Template**, enable a clean human-readable layout (e.g., `{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}`) so uploaded originals under `/mnt/data/immich/library/` remain easy to browse and back up.
-4. **Align nightly jobs with SnapRAID (`04:00`):** Under **Administration → Settings → Backup Settings** and **Library**, schedule daily DB backups and external library scans around `03:00–03:30` so array HDDs wake once per night.
+1. **Create your admin account:** Open `https://photos.<your-delegated-subdomain>` from a Tailscale-connected device and
+   register your personal admin account (e.g., Ranil).
+2. **Enable Intel QuickSync transcoding:** Under **Administration → Settings → Video Transcoding Settings**, select
+   **Hardware Acceleration: Quick Sync** (device `/dev/dri/renderD128`) and enable hardware decoding.
+3. **Enable Storage Template (recommended):** Under **Administration → Settings → Storage Template**, enable a clean
+   human-readable layout (e.g., `{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}`) so uploaded originals under
+   `/mnt/data/immich/library/` remain easy to browse and back up.
+4. **Align nightly jobs with SnapRAID (`04:00`):** Under **Administration → Settings → Backup Settings** and
+   **Library**, schedule daily DB backups and external library scans around `03:00–03:30` so array HDDs wake once per
+   night.
 5. **Wire up the shared Family Album (`/mnt/data/photos`):**
-   - Under **Administration → Users**, create a dedicated **`family`** account (plus personal accounts for any other family members).
-   - Under **Administration → External Libraries**, create an external library owned by **`family`** with import path **`/mnt/data/photos`**, and trigger an initial scan.
-   - Sign in once as **`family`**, open **Account Settings → Sharing (Partner Sharing)**, and share with your personal account and each family member's account.
-   - In each family member's personal account (**Account Settings → Sharing**), turn on **"Show in timeline"** for **`family`**.
-   - **Result:** Everyone sees the shared `/mnt/data/photos` family album in their timeline (add new family archive photos anytime via the `photos` Samba share), while every user's own account & mobile backups stay private by default (and anyone can use collaborative **Shared Albums** to share phone photos with the family).
+    - Under **Administration → Users**, create a dedicated **`family`** account (plus personal accounts for any other
+      family members).
+    - Under **Administration → External Libraries**, create an external library owned by **`family`** with import path
+      **`/mnt/data/photos`**, and trigger an initial scan.
+    - Sign in once as **`family`**, open **Account Settings → Sharing (Partner Sharing)**, and share with your personal
+      account and each family member's account.
+    - In each family member's personal account (**Account Settings → Sharing**), turn on **"Show in timeline"** for
+      **`family`**.
+    - **Result:** Everyone sees the shared `/mnt/data/photos` family album in their timeline (add new family archive
+      photos anytime via the `photos` Samba share), while every user's own account & mobile backups stay private by
+      default (and anyone can use collaborative **Shared Albums** to share phone photos with the family).
 
 ### Diagnostics & Verification
 
@@ -570,17 +659,27 @@ sudo intel_gpu_top
 
 ## 12. Backups & Disaster Recovery (`postgresqlBackup` + `restic`)
 
-`modules/backups.nix` protects every piece of irreplaceable data and non-declarative service/host state using two coordinated nightly jobs aligned with the `04:00` SnapRAID window so sleeping HDDs wake up only once per night:
+`modules/backups.nix` protects every piece of irreplaceable data and non-declarative service/host state using two
+coordinated nightly jobs aligned with the `04:00` SnapRAID window so sleeping HDDs wake up only once per night:
 
 - **`03:00` — Local PostgreSQL Dumps (`postgresqlBackup` + `younix-postgres-hdd-sync`)**:
-  - Runs `pg_dumpall` compressed with `zstd` (`backupAll = true`, capturing all databases, roles, and permissions — including Immich today and Paperless-ngx automatically once `T-016` is deployed) to `/var/backup/postgresql/all.sql.zstd` on the 1 TB NVMe SSD.
-  - Immediately mirrors the dumps onto `/mnt/data/backups/postgres/` on the MergerFS HDD pool (giving local SnapRAID parity protection at `04:00` and instant local recovery if the NVMe SSD ever fails, while keeping `systemd-tmpfiles` strictly on NVMe so boot never races `/mnt/data`).
+    - Runs `pg_dumpall` compressed with `zstd` (`backupAll = true`, capturing all databases, roles, and permissions —
+      including Immich today and Paperless-ngx automatically once `T-016` is deployed) to
+      `/var/backup/postgresql/all.sql.zstd` on the 1 TB NVMe SSD.
+    - Immediately mirrors the dumps onto `/mnt/data/backups/postgres/` on the MergerFS HDD pool (giving local SnapRAID
+      parity protection at `04:00` and instant local recovery if the NVMe SSD ever fails, while keeping
+      `systemd-tmpfiles` strictly on NVMe so boot never races `/mnt/data`).
 - **`03:15` — Encrypted Offsite S3 Backup (`restic-backups-offsite` / `restic-offsite`)**:
-  - Verifies `/mnt/data` is mounted (aborting with exit code `1` if unmounted so `restic` never creates an incomplete snapshot or prunes healthy snapshots).
-  - Creates atomic, online-consistent SQLite `.backup` snapshots of Jellyfin's live databases (`/var/lib/jellyfin/data/*.db` → `/var/backup/jellyfin/*.db`) without stopping Jellyfin.
-  - Encrypts client-side (AES-256 / Poly1305-AES) and uploads deduplicated chunks to an S3-compatible bucket (`initialize = true` creates the repo automatically on first run).
-  - Applies snapshot retention (`7` daily, `4` weekly, `12` monthly, `3` yearly) and verifies full index/snapshot metadata plus a random `500 MB` subset of remote pack files (`~15 GB/month` bounded egress).
-  - Cgroup-bounded (`Nice=10`, `CPUQuota=200%`, `MemoryHigh=1500M`, `MemoryMax=2500M`, `GOMEMLIMIT=1200MiB`) so large initial uploads never starve SSH, Samba, Jellyfin, or Immich.
+    - Verifies `/mnt/data` is mounted (aborting with exit code `1` if unmounted so `restic` never creates an incomplete
+      snapshot or prunes healthy snapshots).
+    - Creates atomic, online-consistent SQLite `.backup` snapshots of Jellyfin's live databases
+      (`/var/lib/jellyfin/data/*.db` → `/var/backup/jellyfin/*.db`) without stopping Jellyfin.
+    - Encrypts client-side (AES-256 / Poly1305-AES) and uploads deduplicated chunks to an S3-compatible bucket
+      (`initialize = true` creates the repo automatically on first run).
+    - Applies snapshot retention (`7` daily, `4` weekly, `12` monthly, `3` yearly) and verifies full index/snapshot
+      metadata plus a random `500 MB` subset of remote pack files (`~15 GB/month` bounded egress).
+    - Cgroup-bounded (`Nice=10`, `CPUQuota=200%`, `MemoryHigh=1500M`, `MemoryMax=2500M`, `GOMEMLIMIT=1200MiB`) so large
+      initial uploads never starve SSH, Samba, Jellyfin, or Immich.
 
 ### What Is Backed Up vs. Excluded
 
@@ -603,16 +702,20 @@ sudo intel_gpu_top
 
 1. Create a Backblaze B2 account in the **EU Central** region (selected during sign-up).
 2. Under **Buckets → Create a Bucket**:
-   - **Files in Bucket are:** `Private`
-   - **Lifecycle Settings** *(important)*: After creating the bucket, set **Lifecycle Settings** to **`Keep only the last version of the file`** (otherwise B2 retains deleted pack versions when `restic prune` runs and bills for them indefinitely).
-   - Note the bucket's **Endpoint** (e.g., `s3.eu-central-003.backblazeb2.com`).
+    - **Files in Bucket are:** `Private`
+    - **Lifecycle Settings** *(important)*: After creating the bucket, set **Lifecycle Settings** to
+      **`Keep only the last version of the file`** (otherwise B2 retains deleted pack versions when `restic prune` runs
+      and bills for them indefinitely).
+    - Note the bucket's **Endpoint** (e.g., `s3.eu-central-003.backblazeb2.com`).
 3. Under **Application Keys → Add a New Application Key**:
-   - Scope it to **only** your backup bucket (`Allow access to Bucket(s): <bucket-name>`), **Read and Write** (never use the Master Application Key).
-   - Copy the generated **`keyID`** and **`applicationKey`** immediately (the `applicationKey` is shown only once).
+    - Scope it to **only** your backup bucket (`Allow access to Bucket(s): <bucket-name>`), **Read and Write** (never
+      use the Master Application Key).
+    - Copy the generated **`keyID`** and **`applicationKey`** immediately (the `applicationKey` is shown only once).
 
 #### Adding Secrets to `secrets/secrets.yaml` (on macOS)
 
-Generate a strong repository encryption password on your Mac (`openssl rand -base64 32`), then add the `restic` block to `secrets/secrets.yaml`:
+Generate a strong repository encryption password on your Mac (`openssl rand -base64 32`), then add the `restic` block to
+`secrets/secrets.yaml`:
 
 ```bash
 sops secrets/secrets.yaml
@@ -626,13 +729,19 @@ restic:
   aws_secret_access_key: <b2-applicationKey>
 ```
 
-*(Restic's S3 backend expects the standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` variable names even when talking to Backblaze B2.)*
+*(Restic's S3 backend expects the standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` variable names even when
+talking to Backblaze B2.)*
 
-> **Important — Password Manager Backup:** Save a copy of your `restic` `repository`, `password`, and Backblaze B2 Application Key in your password manager alongside `/etc/keys/hdd.key`, `/etc/keys/sops.key`, and your macOS `age` key. If `younix` and your home are ever lost simultaneously (fire/theft), you need those credentials to decrypt and restore directly from Backblaze B2 onto a new machine.
+> **Important — Password Manager Backup:** Save a copy of your `restic` `repository`, `password`, and Backblaze B2
+> Application Key in your password manager alongside `/etc/keys/hdd.key`, `/etc/keys/sops.key`, and your macOS `age`
+> key.
+> If `younix` and your home are ever lost simultaneously (fire/theft), you need those credentials to decrypt and restore
+> directly from Backblaze B2 onto a new machine.
 
 ### Operations & Verification Cheatsheet
 
-NixOS installs a pre-authenticated `restic-offsite` wrapper (`sudo restic-offsite ...`) that automatically loads `/run/secrets/restic/*` and `/run/secrets/rendered/restic-offsite.env`:
+NixOS installs a pre-authenticated `restic-offsite` wrapper (`sudo restic-offsite ...`) that automatically loads
+`/run/secrets/restic/*` and `/run/secrets/rendered/restic-offsite.env`:
 
 ```bash
 # Check scheduled backup timers (03:00 PostgreSQL, 03:15 offsite restic)
@@ -672,7 +781,8 @@ sudo restic-offsite restore latest \
 ls -la /tmp/restore-test/mnt/data/photos
 ```
 
-*(Replace `latest` with any specific snapshot ID from `sudo restic-offsite snapshots` to restore an older point-in-time version.)*
+*(Replace `latest` with any specific snapshot ID from `sudo restic-offsite snapshots` to restore an older point-in-time
+version.)*
 
 #### 2. Restore PostgreSQL Databases (Immich / Paperless)
 
@@ -710,7 +820,9 @@ sudo systemctl start jellyfin
 
 #### 4. Full Bare-Metal Disaster Recovery (Total NVMe + HDD Loss)
 
-1. Follow the [Bootstrap Guide](bootstrap.md) to install NixOS from `github:stravag/younix#younix`, restore `/etc/keys/hdd.key` and `/etc/keys/sops.key` from your password manager ([Section 4](#4-keyfile-recovery-if-the-1-tb-nvme-is-reinstalled)), and mount the new MergerFS `/mnt/data` pool.
+1. Follow the [Bootstrap Guide](bootstrap.md) to install NixOS from `github:stravag/younix#younix`, restore
+   `/etc/keys/hdd.key` and `/etc/keys/sops.key` from your password manager
+   ([Section 4](#4-keyfile-recovery-if-the-1-tb-nvme-is-reinstalled)), and mount the new MergerFS `/mnt/data` pool.
 2. Stop stateful app services before restoring data over `/var/lib` and `/mnt/data`:
    ```bash
    sudo systemctl stop immich-server immich-machine-learning jellyfin caddy tailscaled
@@ -727,16 +839,23 @@ sudo systemctl start jellyfin
 
 ## 13. System Metrics & Logs Dashboard (Beszel)
 
-`modules/services/beszel.nix` runs a local **Beszel Hub** (`127.0.0.1:8090`) and **Beszel Agent** (`127.0.0.1:45876`) behind Caddy at **`https://status.<domain>`** (Tailscale-only).
+`modules/services/beszel.nix` runs a local **Beszel Hub** (`127.0.0.1:8090`) and **Beszel Agent** (`127.0.0.1:45876`)
+behind Caddy at **`https://status.<domain>`** (Tailscale-only).
 
-- **Metrics**: CPU, RAM/zram, load, network, temperatures, Intel QuickSync GPU (`intel_gpu_top`), NVMe root + `/mnt/data` / `/mnt/disk1` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
+- **Metrics**: CPU, RAM/zram, load, network, temperatures, Intel QuickSync GPU (`intel_gpu_top`), NVMe root +
+  `/mnt/data` / `/mnt/disk1` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
 - **Logs**: Click any systemd service inside the `younix` host view to inspect its `journald` logs directly in the UI.
-- **HDD spindown safety**: Beszel polls S.M.A.R.T. every `1h` using `smartctl -n standby` and serves cached attributes while drives are spun down, so sleeping HDDs are not woken; `smartd -n standby,q` continues running scheduled Short/Long self-tests.
+- **HDD spindown safety**: Beszel polls S.M.A.R.T. every `1h` using `smartctl -n standby` and serves cached attributes
+  while drives are spun down, so sleeping HDDs are not woken; `smartd -n standby,q` continues running scheduled
+  Short/Long self-tests.
 
 ### One-Time First-Run Setup (in Browser)
 
-1. Open `https://status.<domain>` over Tailscale and create the initial admin account using email **`admin@younix.local`** (matching `AUTO_LOGIN` in `modules/services/beszel.nix`) and any throwaway 10+ character password.
-2. That's it — the `younix` system is provisioned declaratively via `/var/lib/beszel-hub/beszel_data/config.yml` (`SHARE_ALL_SYSTEMS=true`) and automatically paired with the local agent via `younix-beszel-agent-key.service`.
+1. Open `https://status.<domain>` over Tailscale and create the initial admin account using email
+   **`admin@younix.local`** (matching `AUTO_LOGIN` in `modules/services/beszel.nix`) and any throwaway 10+ character
+   password.
+2. That's it — the `younix` system is provisioned declaratively via `/var/lib/beszel-hub/beszel_data/config.yml`
+   (`SHARE_ALL_SYSTEMS=true`) and automatically paired with the local agent via `younix-beszel-agent-key.service`.
 3. Reload or open a new tab: `AUTO_LOGIN` signs you in automatically with no login prompt.
 
 ### Quick Verification Commands
@@ -751,17 +870,19 @@ sudo hdparm -C /dev/sd?   # confirm sleeping HDDs remain in standby
 
 ## 14. Front-Panel LED Legend (`younix-leds`)
 
-`modules/leds.nix` controls the UGREEN DXP4800 Plus front-panel RGB LEDs (`led-ugreen` @ I2C `0x3a`) with standby-safe drive polling (`hdparm -C` every 15 s, `smartctl -n standby -H` every 5 min, and `/proc/mounts` inspection every 10 s — never waking sleeping HDDs):
+`modules/leds.nix` controls the UGREEN DXP4800 Plus front-panel RGB LEDs (`led-ugreen` @ I2C `0x3a`) with standby-safe
+drive polling (`hdparm -C` every 15 s, `smartctl -n standby -H` every 5 min, and `/proc/mounts` inspection every 10 s —
+never waking sleeping HDDs):
 
-| LED          | Color & Brightness  | Pattern                | Meaning                                                                                              |
-| :----------- | :------------------ | :--------------------- | :--------------------------------------------------------------------------------------------------- |
-| **Power**    | White (`32/255`)    | Steady                 | System healthy; all configured array mountpoints (`/mnt/data`, `/mnt/disk*`, `/mnt/parity*`) mounted |
-| **Power**    | Amber (`32/255`)    | Steady                 | Degraded/unmounted array — one or more configured array mountpoints are missing                      |
-| **LAN**      | White (`32/255`)    | Solid + blink on RX/TX | Active Ethernet link (`netdev` kernel trigger); off if no NIC has carrier                            |
-| **Disk 1–4** | Off (`0/255`)       | Off                    | Empty SATA bay                                                                                       |
-| **Disk 1–4** | White (`32/255`)    | Solid + blink on I/O   | Drive healthy and spun up (`active/idle`)                                                            |
-| **Disk 1–4** | Dim Blue (`10/255`) | Steady                 | Drive healthy and spun down (`standby`/`sleeping`)                                                   |
-| **Disk 1–4** | Red (`32/255`)      | Solid (+ blink on I/O) | Drive offline or S.M.A.R.T. health failure (overrides standby)                                       |
+| LED          | Color & Brightness | Pattern                | Meaning                                                                                              |
+| :----------- | :----------------- | :--------------------- | :--------------------------------------------------------------------------------------------------- |
+| **Power**    | White              | Steady                 | System healthy; all configured array mountpoints (`/mnt/data`, `/mnt/disk*`, `/mnt/parity*`) mounted |
+| **Power**    | Amber              | Steady                 | Degraded/unmounted array — one or more configured array mountpoints are missing                      |
+| **LAN**      | White              | Solid + blink on RX/TX | Active Ethernet link (`netdev` kernel trigger); off if no NIC has carrier                            |
+| **Disk 1–4** | Off                | Off                    | Empty SATA bay                                                                                       |
+| **Disk 1–4** | White              | Solid + blink on I/O   | Drive healthy and spun up (`active/idle`)                                                            |
+| **Disk 1–4** | Dim Blue           | Steady                 | Drive healthy and spun down (`standby`/`sleeping`)                                                   |
+| **Disk 1–4** | Red                | Solid (+ blink on I/O) | Drive offline or S.M.A.R.T. health failure (overrides standby)                                       |
 
 ### Quick Verification Commands
 
