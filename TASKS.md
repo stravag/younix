@@ -84,6 +84,40 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - Push workflow and verify green run in GitHub Actions.
 
+### T-021 — Backup & restore drill + simplified emergency runbook
+- **Status**: `ready`
+- **Depends on**: `T-017`, `T-018`
+- **Goal**: Simplify the backup/restore sections of `docs/runbook.md` into a short, scannable, stress-proof checklist executable without an LLM, and validate it end-to-end with a real restore drill.
+- **Scope**:
+  - Trim and restructure `docs/runbook.md` so emergency recovery steps are concise, step-by-step, and free of explanatory clutter (moving reference/architecture notes elsewhere if needed).
+  - Run an end-to-end restore drill from Backblaze B2 (`restic-offsite` and standalone `restic` using password-manager credentials) covering file recovery, PostgreSQL dump verification/restore, and Jellyfin state restore.
+  - Fix any friction or missing steps discovered during the drill.
+- **Verification**:
+  - Complete the restore drill following only the simplified runbook (no LLM assistance) and confirm restored data/DB integrity.
+
+### T-022 — Disk failure recovery drill + simplified emergency runbook
+- **Status**: `ready`
+- **Depends on**: `T-007`
+- **Goal**: Simplify the drive-failure sections of `docs/runbook.md` into a short, stress-proof checklist executable without an LLM, and rehearse a disk-failure recovery scenario end-to-end.
+- **Scope**:
+  - Condense `docs/runbook.md` drive-failure procedures (failed data drive, failed parity drive, accidental deletion, NVMe keyfile recovery) into minimal, unambiguous copy-paste steps.
+  - Design and run a safe disk-failure drill (e.g., simulated/safe test recovery or spare drive swap) verifying LUKS2 setup, SnapRAID rebuild (`snapraid fix`), MergerFS remount, and front-panel LED behavior.
+  - Refine the runbook based on anything that felt unclear or slow during the drill.
+- **Verification**:
+  - Complete the disk-failure drill following only the simplified runbook (no LLM assistance) with zero data loss and `snapraid status` reporting clean.
+
+### T-023 — Enhanced front-panel LED states (standby color & status feedback)
+- **Status**: `needs-decision`
+- **Depends on**: `T-004`, `T-008`
+- **Open decision**: Choose desired LED colors/brightness/blink patterns for each state (e.g., active white, standby/spun-down dim blue or amber, I/O activity blink, SMART/array fault red, optional backup/sync indicator).
+- **Goal**: Make `younix-leds` (`modules/leds.nix`) convey richer hardware state at a glance—such as changing bay LED color/brightness when a drive is spun down (`hdparm -C` standby check without waking sleeping HDDs).
+- **Scope**:
+  - Extend `younix-leds` in `modules/leds.nix` to detect drive power state (standby vs active/idle) using standby-safe polling (`hdparm -C`) and reflect it via bay LED RGB color/brightness.
+  - Optionally add visual indicators for other system states (e.g., degraded/unmounted array, active SnapRAID sync/scrub, or offsite backup in progress).
+  - Document the LED color legend in `docs/runbook.md`.
+- **Verification**:
+  - Confirm bay LEDs switch cleanly between active and spun-down states without waking sleeping drives, and still show red on SMART/offline faults.
+
 ---
 
 ## Completed
