@@ -722,3 +722,31 @@ sudo systemctl start jellyfin
    zstdcat /mnt/data/backups/postgres/all.sql.zstd | sudo -u postgres psql -v ON_ERROR_STOP=0 postgres
    ```
 4. Reboot (`sudo reboot`) and verify `tailscale status`, `caddy`, `jellyfin`, `immich-server`, and `sudo snapraid sync`.
+
+---
+
+## 10. System Metrics & Logs Dashboard (Beszel)
+
+`modules/services/beszel.nix` runs a local **Beszel Hub** (`127.0.0.1:8090`) and **Beszel Agent** (`127.0.0.1:45876`) behind Caddy at **`https://status.<domain>`** (Tailscale-only).
+
+- **Metrics**: CPU, RAM/zram, load, network, temperatures, Intel QuickSync GPU (`intel_gpu_top`), NVMe root + `/mnt/data` / `/mnt/disk1` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
+- **Logs**: Click any systemd service inside the `younix` host view to inspect its `journald` logs directly in the UI.
+- **HDD spindown safety**: Beszel's built-in SMART polling is explicitly disabled (`SMART_DEVICES=""`) so sleeping HDDs are never woken; `smartd -n standby,q` remains the single source of truth for disk health.
+
+### One-Time First-Run Setup (in Browser)
+
+1. Open `https://status.<domain>` over Tailscale and create the initial admin account using email **`admin@younix.local`** (matching `AUTO_LOGIN` in `modules/services/beszel.nix`) and any strong password stored in your password manager.
+2. Click **Add System**:
+   - **Name**: `younix`
+   - **Host / IP**: `127.0.0.1`
+   - **Port**: `45876`
+   - Save — no manual key copy is needed because `younix-beszel-agent-key.service` automatically pairs the local agent with the hub's key.
+3. Reload or open a new tab: `AUTO_LOGIN` signs you in automatically with no login prompt.
+
+### Quick Verification Commands
+
+```bash
+systemctl status beszel-hub younix-beszel-agent-key beszel-agent
+journalctl -u beszel-hub -u younix-beszel-agent-key -u beszel-agent -n 40
+sudo hdparm -C /dev/sd?   # confirm sleeping HDDs remain in standby
+```

@@ -37,6 +37,7 @@
           ./modules/proxy.nix
           ./modules/services/jellyfin.nix
           ./modules/services/immich.nix
+          ./modules/services/beszel.nix
         ];
       };
     };
