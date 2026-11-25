@@ -3,9 +3,21 @@
 let
   hubHost = "127.0.0.1";
   hubPort = 8090;
-  agentListen = "127.0.0.1:45876";
+  agentHost = "127.0.0.1";
+  agentPort = 45876;
+  agentListen = "${agentHost}:${toString agentPort}";
   agentEnvDir = "/run/beszel-agent";
   agentEnvFile = "${agentEnvDir}/hub.env";
+
+  # Declarative systems list synced by beszel-hub on startup.
+  # Paired with SHARE_ALL_SYSTEMS=true so no personal email is needed in this
+  # public repo (works with AUTO_LOGIN today and Pocket-ID OIDC later).
+  hubConfigYml = pkgs.writeText "beszel-config.yml" ''
+    systems:
+      - name: younix
+        host: ${agentHost}
+        port: ${toString agentPort}
+  '';
 
   # Wait for beszel-hub to generate its local Ed25519 keypair under /var/lib/beszel-hub
   # and write KEY="<pubkey>" into /run/beszel-agent/hub.env so the local agent pairs
@@ -57,12 +69,20 @@ in
       # Auto-authenticate the single local admin account since access is already
       # gated behind Tailscale + Caddy HTTPS (create this account on first visit).
       AUTO_LOGIN = "admin@younix.local";
+      # Make declaratively provisioned systems visible to all authenticated users
+      # (both admin@younix.local today and Pocket-ID OIDC users later).
+      SHARE_ALL_SYSTEMS = "true";
     };
   };
 
-  systemd.services.beszel-hub.serviceConfig = {
-    MemoryHigh = "128M";
-    MemoryMax = "256M";
+  systemd.services.beszel-hub = {
+    preStart = ''
+      ln -sfn ${hubConfigYml} /var/lib/beszel-hub/config.yml
+    '';
+    serviceConfig = {
+      MemoryHigh = "128M";
+      MemoryMax = "256M";
+    };
   };
 
   systemd.services.younix-beszel-agent-key = {

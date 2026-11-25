@@ -137,12 +137,12 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Artifacts**: `modules/services/beszel.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
 - **Goal**: Deploy a lightweight web UI dashboard (`https://status.<domain>`, Tailscale-only with no extra login prompt) showing key system metrics (CPU, RAM/swap, temps, NVMe & HDD pool usage, Intel iGPU) and systemd service status + per-service `journald` logs without waking spun-down HDDs.
 - **Scope**:
-  - Create `modules/services/beszel.nix` enabling `services.beszel.hub` (`127.0.0.1:8090`, `AUTO_LOGIN=admin@younix.local`) and `services.beszel.agent` (`127.0.0.1:45876`, `intel_gpu_top`, `systemd-journal` log access, `EXTRA_FILESYSTEMS` for `/mnt/data`/`/mnt/disk1`/`/mnt/parity1`, `SMART_DEVICES=""` to preserve HDD spindown).
+  - Create `modules/services/beszel.nix` enabling `services.beszel.hub` (`127.0.0.1:8090`, `AUTO_LOGIN=admin@younix.local`, `SHARE_ALL_SYSTEMS=true`, declarative `/var/lib/beszel-hub/config.yml` for `younix`) and `services.beszel.agent` (`127.0.0.1:45876`, `intel_gpu_top`, `systemd-journal` log access, `EXTRA_FILESYSTEMS` for `/mnt/data`/`/mnt/disk1`/`/mnt/parity1`, `SMART_DEVICES=""` to preserve HDD spindown).
   - Auto-sync the hub's local Ed25519 public key into `/run/beszel-agent/hub.env` via `younix-beszel-agent-key.service`.
   - Expose `https://status.<domain>` via `younix.proxy.routes.status`.
 - **Verification**:
   - Deploy via `comin` and confirm `beszel-hub`, `younix-beszel-agent-key`, and `beszel-agent` are active with zero errors.
-  - Complete 1-minute first-run setup at `https://status.<domain>` (`admin@younix.local`, add system `younix` at `127.0.0.1:45876`), confirm auto-login works in a fresh tab, and verify metrics, Intel GPU, systemd service logs, and HDD standby safety (`sudo hdparm -C /dev/sd?`).
+  - Complete one-time `admin@younix.local` initialization at `https://status.<domain>`, confirm `younix` is already provisioned & online, auto-login works in a fresh tab, and verify metrics, Intel GPU, systemd service logs, and HDD standby safety (`sudo hdparm -C /dev/sd?`).
 
 ---
 
