@@ -61,6 +61,19 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - Drop a test PDF into the Samba inbox from macOS; confirm Paperless ingests, OCRs, indexes, and stores it under `/mnt/data/documents`.
 
+### T-024 — Declarative Immich configuration (`services.immich.settings`)
+- **Status**: `ready`
+- **Depends on**: `T-015`
+- **Goal**: Migrate Immich from UI-managed settings (`services.immich.settings = null`) to a declarative `services.immich.settings` configuration in `modules/services/immich.nix` so ML (OCR disabled, Smart Search & Face Recognition enabled), Intel QuickSync QSV transcoding, storage template, and job concurrency are version-controlled in Git.
+- **Scope**:
+  - Export the current live Immich config from PostgreSQL on `younix` (`SELECT value FROM system_metadata WHERE key = 'system-config';`) so no existing UI settings are lost.
+  - Ensure no personal domains, passwords, or tokens are committed to the public repo (use `sops-nix` / `._secret` if any secret fields are needed).
+  - Replace `settings = null;` in `modules/services/immich.nix` with declarative `services.immich.settings` (including `machineLearning.ocr.enabled = false`, QSV transcoding, and tuned job concurrency).
+  - Note in `docs/runbook.md` that Immich Admin Settings are managed declaratively in Nix (read-only in the Web UI).
+- **Verification**:
+  - Deploy via `comin` and confirm `immich-server` starts cleanly with no config schema errors.
+  - Verify in Immich's Admin Settings UI that QuickSync QSV, Smart Search, Facial Recognition, and OCR=disabled reflect the Nix config (and show as read-only).
+
 ---
 
 ## Phase 4 — Backups, Observability & CI
