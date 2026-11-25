@@ -98,8 +98,19 @@ in
     # (lifts systemd PrivateDevices for /dev/dri/renderD128).
     accelerationDevices = [ "/dev/dri/renderD128" ];
 
-    # Native ML microservice (CLIP smart search, facial recognition) on NVMe.
-    machine-learning.enable = true;
+    # Native ML microservice (CLIP smart search, facial recognition, OCR) on NVMe.
+    # Limit concurrency and give Gunicorn headroom so bulk jobs finish quietly
+    # without spiking the Pentium Gold 8505 into 90C+ turbo / full-speed fan ramps.
+    machine-learning = {
+      enable = true;
+      environment = {
+        MACHINE_LEARNING_REQUEST_THREADS = "2";
+        MACHINE_LEARNING_MODEL_INTER_OP_THREADS = "1";
+        MACHINE_LEARNING_MODEL_INTRA_OP_THREADS = "2";
+        MACHINE_LEARNING_MODEL_TTL = "180";
+        MACHINE_LEARNING_WORKER_TIMEOUT = lib.mkForce "300";
+      };
+    };
 
     # Leave Immich system settings editable via the Admin Web UI (QuickSync QSV,
     # storage template, external libraries, backup schedule, etc.).
@@ -183,13 +194,15 @@ in
 
   systemd.services.immich-machine-learning = {
     serviceConfig = {
-      # Keep CLIP/face-recognition bursts bounded so ML never triggers global OOM
-      # or starves interactive services during initial library imports.
+      # Keep CLIP/face-recognition/OCR bursts cool and quiet (150% CPU avoids 90C+
+      # turbo spikes that slam the CPU fan to ~3500 RPM), while giving enough RAM
+      # headroom (3G high / 4G max) so all 5 loaded models don't thrash MemoryHigh
+      # and hit Gunicorn worker timeouts in a restart loop.
       Nice = 15;
       IOSchedulingClass = "idle";
-      CPUQuota = "300%";
-      MemoryHigh = "2G";
-      MemoryMax = "3G";
+      CPUQuota = "150%";
+      MemoryHigh = "3G";
+      MemoryMax = "4G";
       OOMScoreAdjust = 500;
     };
   };
