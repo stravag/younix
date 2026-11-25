@@ -725,7 +725,7 @@ sudo systemctl start jellyfin
 
 ---
 
-## 10. System Metrics & Logs Dashboard (Beszel)
+## 13. System Metrics & Logs Dashboard (Beszel)
 
 `modules/services/beszel.nix` runs a local **Beszel Hub** (`127.0.0.1:8090`) and **Beszel Agent** (`127.0.0.1:45876`) behind Caddy at **`https://status.<domain>`** (Tailscale-only).
 
@@ -745,4 +745,28 @@ sudo systemctl start jellyfin
 systemctl status beszel-hub younix-beszel-agent-key beszel-agent
 journalctl -u beszel-hub -u younix-beszel-agent-key -u beszel-agent -n 40
 sudo hdparm -C /dev/sd?   # confirm sleeping HDDs remain in standby
+```
+
+---
+
+## 14. Front-Panel LED Legend (`younix-leds`)
+
+`modules/leds.nix` controls the UGREEN DXP4800 Plus front-panel RGB LEDs (`led-ugreen` @ I2C `0x3a`) with standby-safe drive polling (`hdparm -C` every 15 s, `smartctl -n standby -H` every 5 min, and `/proc/mounts` inspection every 10 s — never waking sleeping HDDs):
+
+| LED          | Color & Brightness  | Pattern                | Meaning                                                                                              |
+| :----------- | :------------------ | :--------------------- | :--------------------------------------------------------------------------------------------------- |
+| **Power**    | White (`32/255`)    | Steady                 | System healthy; all configured array mountpoints (`/mnt/data`, `/mnt/disk*`, `/mnt/parity*`) mounted |
+| **Power**    | Amber (`32/255`)    | Steady                 | Degraded/unmounted array — one or more configured array mountpoints are missing                      |
+| **LAN**      | White (`32/255`)    | Solid + blink on RX/TX | Active Ethernet link (`netdev` kernel trigger); off if no NIC has carrier                            |
+| **Disk 1–4** | Off (`0/255`)       | Off                    | Empty SATA bay                                                                                       |
+| **Disk 1–4** | White (`32/255`)    | Solid + blink on I/O   | Drive healthy and spun up (`active/idle`)                                                            |
+| **Disk 1–4** | Dim Blue (`10/255`) | Steady                 | Drive healthy and spun down (`standby`/`sleeping`)                                                   |
+| **Disk 1–4** | Red (`32/255`)      | Solid (+ blink on I/O) | Drive offline or S.M.A.R.T. health failure (overrides standby)                                       |
+
+### Quick Verification Commands
+
+```bash
+systemctl status younix-leds
+journalctl -u younix-leds -n 30
+sudo hdparm -C /dev/sd?   # verify sleeping drives stay in standby while bay LEDs show dim blue
 ```

@@ -17,7 +17,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `modules/gitops.nix` — Pull-based GitOps deployment with `comin` (polls `main` every 1 hour; supports `testing-younix`).
 - `modules/secrets.nix` — Encrypted declarative secrets via `sops-nix` (decrypted via `/etc/keys/sops.key` into `/run/secrets/`).
 - `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), one-shot `udev` hardware Smart Fan tuning (zero fan daemon), `thermald`, and `powersave` CPU governor.
-- `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller.
+- `modules/leds.nix` — Out-of-tree `led-ugreen` kernel module and `younix-leds` front-panel LED controller (active white + I/O blink, dim blue on HDD standby via `hdparm -C`, red on SMART/offline fault, amber power LED on unmounted/degraded array).
 - `modules/graphics.nix` — Intel Alder Lake QuickSync hardware acceleration (`intel-media-driver` VA-API, `vpl-gpu-rt` oneVPL, `intel-compute-runtime` OpenCL) and GPU diagnostics (`vainfo`, `intel_gpu_top`, `clinfo`).
 - `modules/storage.nix` — LUKS2-encrypted `ext4` HDDs (`/etc/crypttab`), MergerFS pool at `/mnt/data`, scheduled SnapRAID sync/scrub, `smartd` health monitoring, and `hd-idle` 30-min HDD spindown.
 - `modules/backups.nix` — Nightly consistent `zstd` PostgreSQL dumps (`03:00` to NVMe + mirrored to `/mnt/data/backups/postgres`), online SQLite snapshots for Jellyfin, and encrypted Backblaze B2 (EU Central) offsite `restic` backups (`03:15`, `restic-offsite`, credentials via `sops-nix`).

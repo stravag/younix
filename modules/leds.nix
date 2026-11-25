@@ -42,12 +42,22 @@ let
     }
   ) { };
 
+  # Array mountpoints monitored for the degraded-array power LED warning.
+  # Derived declaratively from modules/storage.nix so future disk expansions (T-009)
+  # are tracked automatically without duplicating mount paths.
+  arrayMountPoints = lib.unique (
+    lib.optional (config.fileSystems ? "/mnt/data") "/mnt/data"
+    ++ (config.fileSystems."/mnt/data".depends or [ ])
+    ++ (map builtins.dirOf (config.services.snapraid.parityFiles or [ ]))
+  );
+
   # Active front-panel LED controller for the UGREEN DXP4800 Plus:
   #   - Probes the I2C LED MCU (led-ugreen @ 0x3a on Intel SMBus I801)
-  #   - Power LED: steady white (stops the default boot-time blinking)
+  #   - Power LED: steady white when healthy, steady amber if any array mountpoint is missing
   #   - LAN LED: kernel `netdev` trigger bound to whichever NIC has link (solid on link, blinks on RX/TX)
   #   - Disk 1-4 LEDs: maps ata1..ata4 -> disk1..disk4; off for empty bays, white + I/O activity
-  #     blinking via kernel `oneshot` trigger for healthy drives, red on offline / SMART failure.
+  #     blinking via kernel `oneshot` trigger for active drives, dim blue for spun-down (standby)
+  #     drives (via standby-safe `hdparm -C`), red on offline / SMART failure.
   ledControlScript = pkgs.writeScript "younix-leds" ''
     #!${pkgs.python3}/bin/python3
     import glob
@@ -60,16 +70,21 @@ let
 
     POLL_INTERVAL = 0.25
     NET_CHECK_INTERVAL = 5.0
+    ARRAY_CHECK_INTERVAL = 10.0
+    POWER_CHECK_INTERVAL = 15.0
     SMART_CHECK_INTERVAL = 300.0
 
     # Brightness (0-255) and RGB colors ("R G B")
     BRIGHTNESS_POWER = 32
     BRIGHTNESS_NETDEV = 32
-    BRIGHTNESS_DISK = 32
+    BRIGHTNESS_DISK_ACTIVE = 32
+    BRIGHTNESS_DISK_STANDBY = 10
 
-    COLOR_POWER = "255 255 255"
+    COLOR_POWER_OK = "255 255 255"
+    COLOR_POWER_DEGRADED = "255 120 0"
     COLOR_NETDEV = "255 255 255"
-    COLOR_DISK_OK = "255 255 255"
+    COLOR_DISK_ACTIVE = "255 255 255"
+    COLOR_DISK_STANDBY = "0 100 255"
     COLOR_DISK_FAIL = "255 0 0"
 
     NETDEV_BLINK_INTERVAL_MS = 150
@@ -84,9 +99,11 @@ let
         "ata4": "disk4",
     }
     PREFERRED_NICS = ["enp2s0", "enp5s0"]
+    ARRAY_MOUNTPOINTS = ${builtins.toJSON arrayMountPoints}
 
     LEDS_DIR = "/sys/class/leds"
     SMARTCTL = "${pkgs.smartmontools}/bin/smartctl"
+    HDPARM = "${pkgs.hdparm}/bin/hdparm"
 
     running = True
 
@@ -154,13 +171,29 @@ let
         write_text(led_path(name, "brightness"), 0)
 
 
-    def configure_power_led():
+    def configure_power_led(degraded=False):
         if not os.path.isdir(os.path.join(LEDS_DIR, "power")):
             return
+        color = COLOR_POWER_DEGRADED if degraded else COLOR_POWER_OK
         write_text(led_path("power", "trigger"), "none")
         write_text(led_path("power", "blink_type"), "none")
-        write_text(led_path("power", "color"), COLOR_POWER)
+        write_text(led_path("power", "color"), color)
         write_text(led_path("power", "brightness"), BRIGHTNESS_POWER)
+
+
+    def get_missing_array_mounts():
+        if not ARRAY_MOUNTPOINTS:
+            return ()
+        mounted = set()
+        try:
+            with open("/proc/mounts", "r", encoding="utf-8") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        mounted.add(parts[1].replace("\\040", " "))
+        except OSError:
+            return ()
+        return tuple(mp for mp in ARRAY_MOUNTPOINTS if mp not in mounted)
 
 
     def find_active_nic():
@@ -246,17 +279,52 @@ let
         return True
 
 
-    def configure_disk_led(led, healthy):
+    def check_disk_power(dev):
+        # `hdparm -C` issues ATA CHECK POWER MODE (0xE5), which never wakes sleeping drives.
+        try:
+            proc = subprocess.run(
+                [HDPARM, "-C", f"/dev/{dev}"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            for line in proc.stdout.splitlines():
+                lower = line.lower()
+                if "drive state is:" in lower:
+                    if "standby" in lower or "sleeping" in lower:
+                        return "standby"
+                    return "active"
+        except (OSError, subprocess.SubprocessError):
+            pass
+        return "active"
+
+
+    def configure_disk_led(led, healthy, power):
         if not os.path.isdir(os.path.join(LEDS_DIR, led)):
             return
-        color = COLOR_DISK_OK if healthy else COLOR_DISK_FAIL
-        write_text(led_path(led, "blink_type"), "none")
-        write_text(led_path(led, "trigger"), "oneshot")
-        write_text(led_path(led, "delay_on"), DISK_BLINK_ON_MS)
-        write_text(led_path(led, "delay_off"), DISK_BLINK_OFF_MS)
-        write_text(led_path(led, "invert"), 1)
-        write_text(led_path(led, "color"), color)
-        write_text(led_path(led, "brightness"), BRIGHTNESS_DISK)
+        if not healthy:
+            write_text(led_path(led, "blink_type"), "none")
+            write_text(led_path(led, "trigger"), "oneshot")
+            write_text(led_path(led, "delay_on"), DISK_BLINK_ON_MS)
+            write_text(led_path(led, "delay_off"), DISK_BLINK_OFF_MS)
+            write_text(led_path(led, "invert"), 1)
+            write_text(led_path(led, "color"), COLOR_DISK_FAIL)
+            write_text(led_path(led, "brightness"), BRIGHTNESS_DISK_ACTIVE)
+        elif power == "standby":
+            write_text(led_path(led, "trigger"), "none")
+            write_text(led_path(led, "blink_type"), "none")
+            write_text(led_path(led, "color"), COLOR_DISK_STANDBY)
+            write_text(led_path(led, "brightness"), BRIGHTNESS_DISK_STANDBY)
+        else:
+            write_text(led_path(led, "blink_type"), "none")
+            write_text(led_path(led, "trigger"), "oneshot")
+            write_text(led_path(led, "delay_on"), DISK_BLINK_ON_MS)
+            write_text(led_path(led, "delay_off"), DISK_BLINK_OFF_MS)
+            write_text(led_path(led, "invert"), 1)
+            write_text(led_path(led, "color"), COLOR_DISK_ACTIVE)
+            write_text(led_path(led, "brightness"), BRIGHTNESS_DISK_ACTIVE)
 
 
     def main():
@@ -273,22 +341,42 @@ let
             except OSError as exc:
                 print(f"Warning: failed to reset {name}: {exc}", flush=True)
 
-        configure_power_led()
-        print("Power LED: steady white", flush=True)
-
-        active_nic = object()  # sentinel to force initial setup
+        active_nic = object()      # sentinel to force initial setup
+        missing_mounts = object()  # sentinel to force initial setup
         last_net_check = -NET_CHECK_INTERVAL
+        last_array_check = -ARRAY_CHECK_INTERVAL
+        last_power_check = time.monotonic()
         last_smart_check = time.monotonic()
 
         # Per-bay state tracking
-        bay_state = {}      # led -> (dev, healthy)
+        bay_state = {}      # led -> (dev, healthy, power)
         prev_io = {}        # led -> total_ios
         disk_health = {}    # dev -> bool
+        disk_power = {}     # dev -> "active" | "standby"
 
         while running:
             now = time.monotonic()
 
-            # 1. Keep LAN LED bound to whichever Ethernet interface has carrier
+            # 1. Power LED: steady white when array is mounted, amber if degraded/unmounted
+            if now - last_array_check >= ARRAY_CHECK_INTERVAL:
+                try:
+                    current_missing = get_missing_array_mounts()
+                    if current_missing != missing_mounts:
+                        degraded = bool(current_missing)
+                        configure_power_led(degraded=degraded)
+                        missing_mounts = current_missing
+                        if degraded:
+                            print(
+                                f"Power LED: amber (degraded array — unmounted: {', '.join(current_missing)})",
+                                flush=True,
+                            )
+                        else:
+                            print("Power LED: steady white (array healthy)", flush=True)
+                except OSError as exc:
+                    print(f"Warning: Power LED update failed: {exc}", flush=True)
+                last_array_check = now
+
+            # 2. Keep LAN LED bound to whichever Ethernet interface has carrier
             if now - last_net_check >= NET_CHECK_INTERVAL:
                 try:
                     nic = find_active_nic()
@@ -299,40 +387,59 @@ let
                     print(f"Warning: LAN LED update failed: {exc}", flush=True)
                 last_net_check = now
 
-            # 2. Discover populated bays and refresh SMART health periodically
+            # 3. Discover populated bays and refresh standby power / SMART health periodically
             bays = discover_bay_disks()
-            run_smart = (now - last_smart_check) >= SMART_CHECK_INTERVAL
-            if run_smart:
-                for dev in bays.values():
-                    if dev:
-                        disk_health[dev] = check_disk_healthy(dev)
+            present_devs = {dev for dev in bays.values() if dev}
+            for stale in set(disk_health) - present_devs:
+                disk_health.pop(stale, None)
+            for stale in set(disk_power) - present_devs:
+                disk_power.pop(stale, None)
+
+            if now - last_power_check >= POWER_CHECK_INTERVAL:
+                for dev in present_devs:
+                    disk_power[dev] = check_disk_power(dev)
+                last_power_check = now
+
+            if now - last_smart_check >= SMART_CHECK_INTERVAL:
+                for dev in present_devs:
+                    disk_health[dev] = check_disk_healthy(dev)
                 last_smart_check = now
 
-            # 3. Update bay LEDs and pulse on disk I/O
+            # 4. Update bay LEDs and pulse on disk I/O
             for led, dev in bays.items():
                 try:
                     if dev is None:
-                        if bay_state.get(led) != (None, None):
+                        if bay_state.get(led) != (None, None, None):
                             reset_led(led)
-                            bay_state[led] = (None, None)
+                            bay_state[led] = (None, None, None)
                             prev_io.pop(led, None)
                             print(f"{led}: empty bay (off)", flush=True)
                         continue
 
                     if dev not in disk_health:
                         disk_health[dev] = check_disk_healthy(dev)
+                    if dev not in disk_power:
+                        disk_power[dev] = check_disk_power(dev)
                     healthy = disk_health[dev]
-
-                    if bay_state.get(led) != (dev, healthy):
-                        configure_disk_led(led, healthy)
-                        bay_state[led] = (dev, healthy)
-                        status = "healthy" if healthy else "FAULT"
-                        print(f"{led}: /dev/{dev} ({status})", flush=True)
+                    power = disk_power[dev]
 
                     total_ios, in_progress = read_disk_io(dev)
                     last_ios = prev_io.get(led)
                     prev_io[led] = total_ios
-                    if (last_ios is not None and total_ios != last_ios) or in_progress > 0:
+                    io_active = (last_ios is not None and total_ios != last_ios) or in_progress > 0
+
+                    # Switch out of standby immediately on I/O without waiting for the next hdparm poll
+                    if io_active and power == "standby":
+                        disk_power[dev] = "active"
+                        power = "active"
+
+                    if bay_state.get(led) != (dev, healthy, power):
+                        configure_disk_led(led, healthy, power)
+                        bay_state[led] = (dev, healthy, power)
+                        status = "FAULT" if not healthy else power
+                        print(f"{led}: /dev/{dev} ({status})", flush=True)
+
+                    if io_active and (not healthy or power == "active"):
                         write_text(led_path(led, "shot"), 1)
                 except OSError as exc:
                     print(f"Warning: {led} update failed: {exc}", flush=True)
@@ -359,7 +466,7 @@ in
   systemd.services.younix-leds = {
     description = "UGREEN DXP4800 Plus active front-panel LED controller";
     wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-modules-load.service" "network.target" ];
+    after = [ "systemd-modules-load.service" "network.target" "local-fs.target" ];
     serviceConfig = {
       ExecStart = "${ledControlScript}";
       Restart = "on-failure";
