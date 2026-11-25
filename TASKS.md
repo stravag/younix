@@ -131,19 +131,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - Confirm bay LEDs switch cleanly between active and spun-down states without waking sleeping drives, and still show red on SMART/offline faults.
 
-### T-025 — System metrics & logs dashboard (`Beszel`)
-- **Status**: `in-progress`
-- **Depends on**: `T-012`, `T-013`
-- **Artifacts**: `modules/services/beszel.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
-- **Goal**: Deploy a lightweight web UI dashboard (`https://status.<domain>`, Tailscale-only with no extra login prompt) showing key system metrics (CPU, RAM/swap, temps, NVMe & HDD pool usage, Intel iGPU) and systemd service status + per-service `journald` logs without waking spun-down HDDs.
-- **Scope**:
-  - Create `modules/services/beszel.nix` enabling `services.beszel.hub` (`127.0.0.1:8090`, `AUTO_LOGIN=admin@younix.local`, `SHARE_ALL_SYSTEMS=true`, declarative `/var/lib/beszel-hub/beszel_data/config.yml` for `younix`) and `services.beszel.agent` (`127.0.0.1:45876`, `intel_gpu_top`, standby-safe `smartmon.enable = true`, `systemd-journal` log access, `EXTRA_FILESYSTEMS` for `/mnt/data`/`/mnt/disk1`/`/mnt/parity1`).
-  - Auto-sync the hub's local Ed25519 public key into `/run/beszel-agent/hub.env` via `younix-beszel-agent-key.service`.
-  - Expose `https://status.<domain>` via `younix.proxy.routes.status`.
-- **Verification**:
-  - Deploy via `comin` and confirm `beszel-hub`, `younix-beszel-agent-key`, and `beszel-agent` are active with zero errors.
-  - Complete one-time `admin@younix.local` initialization at `https://status.<domain>`, confirm `younix` is already provisioned & online, auto-login works in a fresh tab, and verify metrics, Intel GPU, systemd service logs, and HDD standby safety (`sudo hdparm -C /dev/sd?`).
-
 ---
 
 ## Completed
@@ -227,3 +214,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/backups.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed encrypted offsite `services.restic.backups.offsite` (`03:15` nightly, `restic-offsite` CLI wrapper, `initialize = true`) targeting **Backblaze B2 (EU Central)** via S3-compatible API with repository URL, encryption password, and scoped B2 Application Key encrypted in `secrets/secrets.yaml` via `sops-nix`. Backs up all irreplaceable data and non-declarative state (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/share`, `/mnt/data/backups/postgres`, `/var/backup/jellyfin`, `/var/lib/jellyfin`, `/var/lib/tailscale`, `/var/lib/caddy`, plus `/mnt/data/users` and `/var/lib/paperless` automatically when enabled) while excluding bulk `/mnt/data/media` and regenerable caches/thumbnails. Configured `/mnt/data` mount-check guard, retention (`pruneOpts`: 7 daily / 4 weekly / 12 monthly / 3 yearly), integrity verification (`checkOpts`: `--with-cache --read-data-subset=500M`), and cgroup CPU/I/O/RAM limits (`GOMEMLIMIT=1200MiB`). Verified initial full upload (`284 GiB`), unattended scheduled `03:15` incremental run, and 3-second test restore of `/mnt/data/backups/postgres` to `/tmp`.
+
+### T-025 — System metrics & logs dashboard (`Beszel`)
+- **Status**: `done`
+- **Artifacts**: `modules/services/beszel.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed lightweight native `services.beszel.hub` (`127.0.0.1:8090`) and `services.beszel.agent` (`127.0.0.1:45876`) behind Caddy HTTPS (`younix.proxy.routes.status` → `https://status.<domain>`, Tailscale-only, ~26 MB combined RAM peak) with passwordless `AUTO_LOGIN=admin@younix.local` and `SHARE_ALL_SYSTEMS=true` (ready for future Pocket-ID OIDC). Provisioned `younix` declaratively via `/var/lib/beszel-hub/beszel_data/config.yml` and auto-paired the local agent via `younix-beszel-agent-key.service`. Enabled Intel QuickSync GPU telemetry (`intel_gpu_top` + `CAP_PERFMON` + `perf_event_open`), systemd service status & per-service `journald` logs (`systemd-journal`), extra filesystems (`/mnt/data`, `/mnt/disk1`, `/mnt/parity1`), and standby-safe S.M.A.R.T. monitoring (`smartmon.enable = true`, `SMART_INTERVAL = "1h"`, `tags = [ ]` override working around the nixpkgs `testing` build-tag bug). Verified live metrics, Intel GPU, S.M.A.R.T. drives, systemd logs, and `/dev/sda` remaining in `standby`.
