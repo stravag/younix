@@ -9,7 +9,7 @@ let
   agentEnvDir = "/run/beszel-agent";
   agentEnvFile = "${agentEnvDir}/hub.env";
 
-  # Declarative systems list synced by beszel-hub on startup.
+  # Declarative systems list synced by beszel-hub on startup from beszel_data/config.yml.
   # Paired with SHARE_ALL_SYSTEMS=true so no personal email is needed in this
   # public repo (works with AUTO_LOGIN today and Pocket-ID OIDC later).
   hubConfigYml = pkgs.writeText "beszel-config.yml" ''
@@ -17,6 +17,8 @@ let
       - name: younix
         host: ${agentHost}
         port: ${toString agentPort}
+        users:
+          - admin@younix.local
   '';
 
   # Wait for beszel-hub to generate its local Ed25519 keypair under /var/lib/beszel-hub
@@ -77,7 +79,9 @@ in
 
   systemd.services.beszel-hub = {
     preStart = ''
-      ln -sfn ${hubConfigYml} /var/lib/beszel-hub/config.yml
+      rm -f /var/lib/beszel-hub/config.yml
+      mkdir -p /var/lib/beszel-hub/beszel_data
+      ln -sfn ${hubConfigYml} /var/lib/beszel-hub/beszel_data/config.yml
     '';
     serviceConfig = {
       MemoryHigh = "128M";
@@ -127,15 +131,23 @@ in
       "mnt-data.mount"
     ];
     serviceConfig = {
-      # Allow reading systemd-journal service logs and Intel iGPU telemetry (/dev/dri).
+      # Allow reading systemd-journal service logs and Intel iGPU telemetry (intel_gpu_top).
       SupplementaryGroups = [
         "systemd-journal"
         "video"
         "render"
       ];
+      NoNewPrivileges = lib.mkForce false;
+      PrivateUsers = lib.mkForce false;
       PrivateDevices = lib.mkForce false;
+      DeviceAllow = [
+        "/dev/dri/card0 rw"
+        "/dev/dri/card1 rw"
+        "/dev/dri/renderD128 rw"
+      ];
       AmbientCapabilities = lib.mkForce [ "CAP_PERFMON" ];
       CapabilityBoundingSet = lib.mkForce [ "CAP_PERFMON" ];
+      SystemCallFilter = lib.mkForce [ "@system-service" "perf_event_open" ];
       MemoryHigh = "128M";
       MemoryMax = "256M";
     };

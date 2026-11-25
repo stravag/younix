@@ -736,7 +736,7 @@ sudo systemctl start jellyfin
 ### One-Time First-Run Setup (in Browser)
 
 1. Open `https://status.<domain>` over Tailscale and create the initial admin account using email **`admin@younix.local`** (matching `AUTO_LOGIN` in `modules/services/beszel.nix`) and any throwaway 10+ character password.
-2. That's it — the `younix` system is provisioned declaratively via `/var/lib/beszel-hub/config.yml` (`SHARE_ALL_SYSTEMS=true`) and automatically paired with the local agent via `younix-beszel-agent-key.service`.
+2. That's it — the `younix` system is provisioned declaratively via `/var/lib/beszel-hub/beszel_data/config.yml` (`SHARE_ALL_SYSTEMS=true`) and automatically paired with the local agent via `younix-beszel-agent-key.service`.
 3. Reload or open a new tab: `AUTO_LOGIN` signs you in automatically with no login prompt.
 
 ### Quick Verification Commands
