@@ -5,13 +5,10 @@
   # Complements modules/thermals.nix (`powersave` governor + `thermald`) and
   # modules/storage.nix (`hd-idle` 30-min HDD spindown).
 
-  # The DXP4800 Plus BIOS sets the ACPI FADT NO_ASPM flag, leaving PCIe ASPM
-  # disabled across all root ports and endpoints (pinning Package C-states at C0/C1).
-  # Override FADT with the conservative `powersave` policy (L0s/L1) so capable
-  # devices can enter low-power link states and unlock Package C2-C8+.
-  # (Takes effect after reboot; systemd-boot keeps previous generations as fallback.)
+  # Request the conservative `powersave` PCIe ASPM policy (L0s/L1) so capable
+  # links enter low-power states and unlock Package C2-C8+ once Native/PCIe ASPM
+  # is enabled in the UGREEN BIOS.
   boot.kernelParams = [
-    "pcie_aspm=force"
     "pcie_aspm.policy=powersave"
   ];
 
