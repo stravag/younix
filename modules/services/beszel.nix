@@ -9,6 +9,14 @@ let
   agentEnvDir = "/run/beszel-agent";
   agentEnvFile = "${agentEnvDir}/hub.env";
 
+  # Work around a nixpkgs beszel packaging bug where the `testing` build tag is
+  # enabled, causing beszel-hub's backgroundSmartFetchEnabled() to return false
+  # and leaving the S.M.A.R.T. tab permanently empty.
+  beszelPkg = pkgs.beszel.overrideAttrs (_: {
+    doCheck = false;
+    tags = [ ];
+  });
+
   # Declarative systems list synced by beszel-hub on startup from beszel_data/config.yml.
   # Paired with SHARE_ALL_SYSTEMS=true so no personal email is needed in this
   # public repo (works with AUTO_LOGIN today and Pocket-ID OIDC later).
@@ -65,6 +73,7 @@ in
   # behind Tailscale-only Caddy HTTPS (https://status.<domain>).
   services.beszel.hub = {
     enable = true;
+    package = beszelPkg;
     host = hubHost;
     port = hubPort;
     environment = {
@@ -102,6 +111,7 @@ in
 
   services.beszel.agent = {
     enable = true;
+    package = beszelPkg;
     openFirewall = false;
     environmentFile = agentEnvFile;
     # Enable standby-safe S.M.A.R.T. monitoring (Beszel invokes smartctl with
