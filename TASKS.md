@@ -65,29 +65,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 4 — Backups, Observability & CI
 
-### T-017 — Local database dumps & versioned snapshots
-- **Status**: `in-progress`
-- **Depends on**: `T-007`
-- **Artifacts**: `modules/backups.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
-- **Goal**: Protect against accidental deletion or bad app updates with automated consistent DB dumps (scheduled ahead of nightly `restic` and `snapraid sync`).
-- **Scope**:
-  - Configured `services.postgresqlBackup` (`backupAll = true`, `zstd` compression, nightly at `03:00` to `/var/backup/postgresql` on NVMe) plus `younix-postgres-hdd-sync.service` mirroring dumps to `/mnt/data/backups/postgres` on the HDD pool (ahead of `03:15` `restic` and `04:00` `snapraid sync`).
-  - Added online atomic SQLite `.backup` snapshots of Jellyfin databases (`/var/backup/jellyfin/*.db`) during `restic` pre-backup preparation.
-- **Verification**:
-  - Deploy and run `sudo systemctl start postgresqlBackup`; verify SQL dumps exist under `/var/backup/postgresql` and `/mnt/data/backups/postgres` and are non-empty.
-
-### T-018 — Automated offsite backups (`restic`)
-- **Status**: `in-progress`
-- **Depends on**: `T-006`, `T-007`, `T-017`
-- **Decision**: Backblaze B2 (EU Central, S3-compatible API; `restic.*` URL, encryption password, and B2 Application Key credentials encrypted via `sops-nix`).
-- **Artifacts**: `modules/backups.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
-- **Scope**:
-  - Created `modules/backups.nix` using `services.restic.backups.offsite` (`03:15` nightly, `initialize = true`, `createWrapper = true` → `restic-offsite`) with `restic/repository`, `restic/password`, `restic/aws_access_key_id`, and `restic/aws_secret_access_key` stored via `sops-nix`.
-  - Backs up all irreplaceable data and non-declarative service/host state (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/share`, `/mnt/data/backups/postgres`, `/var/backup/jellyfin`, `/var/lib/jellyfin`, `/var/lib/tailscale`, `/var/lib/caddy`, plus `/mnt/data/users` and `/var/lib/paperless` automatically when enabled), explicitly excluding bulk `/mnt/data/media` and regenerable caches/thumbnails.
-  - Configured mount-check guard (`mountpoint -q /mnt/data`), retention (`pruneOpts`: 7 daily / 4 weekly / 12 monthly / 3 yearly), integrity verification (`checkOpts`: `--with-cache --read-data-subset=500M`), and cgroup CPU/I/O/RAM caps (`GOMEMLIMIT=1200MiB`).
-- **Verification**:
-  - Add `restic:` secrets to `secrets/secrets.yaml`, deploy, trigger `sudo systemctl start restic-backups-offsite`, inspect `sudo restic-offsite snapshots`, and perform a test restore of one file to `/tmp`.
-
 ### T-019 — System health & failure notifications
 - **Status**: `needs-decision`
 - **Depends on**: `T-006`
@@ -180,3 +157,13 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/services/immich.nix`, `hosts/younix/configuration.nix`, `flake.nix`, `flake.lock`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed native `services.immich` v3.x (pulled selectively from `nixpkgs-unstable` while keeping the base OS on `nixos-26.05`) behind Caddy HTTPS (`younix.proxy.routes.photos` over `tailscale0`). Configured hybrid storage: Samba-managed `/mnt/data/photos` exposed read-only (`ReadOnlyPaths`, `photos` group) as an External Library owned by `family` (shared via Partner Sharing), `/mnt/data/immich` on the HDD pool for Immich-managed uploads/libraries/backups, and NVMe-backed `/var/lib/immich/{thumbs,encoded-video}` projected via systemd `BindPaths` alongside NVMe PostgreSQL (VectorChord), Redis, and OpenVINO/CPU ML (`immich-machine-learning`). Enabled `/dev/dri/renderD128` (`video`, `render`, `LIBVA_DRIVER_NAME=iHD`), `zramSwap` (`zstd`, 50% RAM), and systemd CPU/I/O/RAM/OOM caps (`MemoryHigh`/`MemoryMax`) on `immich-server` and `immich-machine-learning`. Verified 16k+ photo/video library scan, ML face recognition, and resource isolation live on `younix`.
+
+### T-017 — Local database dumps & versioned snapshots
+- **Status**: `done`
+- **Artifacts**: `modules/backups.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Configured `services.postgresqlBackup` (`backupAll = true`, `zstd` compression, nightly at `03:00` to `/var/backup/postgresql` on NVMe) paired with `younix-postgres-hdd-sync.service` mirroring dumps to `/mnt/data/backups/postgres` on the MergerFS HDD pool (ahead of `03:15` offsite `restic` and `04:00` SnapRAID sync), plus online atomic `sqlite3 .backup` snapshots of Jellyfin databases into `/var/backup/jellyfin`. Verified both manual and scheduled `03:00` runs producing `all.sql.zstd` and `all.prev.sql.zstd` (`76M` each) under `/var/backup/postgresql` and `/mnt/data/backups/postgres`.
+
+### T-018 — Automated offsite backups (`restic`)
+- **Status**: `done`
+- **Artifacts**: `modules/backups.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed encrypted offsite `services.restic.backups.offsite` (`03:15` nightly, `restic-offsite` CLI wrapper, `initialize = true`) targeting **Backblaze B2 (EU Central)** via S3-compatible API with repository URL, encryption password, and scoped B2 Application Key encrypted in `secrets/secrets.yaml` via `sops-nix`. Backs up all irreplaceable data and non-declarative state (`/mnt/data/photos`, `/mnt/data/immich`, `/mnt/data/documents`, `/mnt/data/share`, `/mnt/data/backups/postgres`, `/var/backup/jellyfin`, `/var/lib/jellyfin`, `/var/lib/tailscale`, `/var/lib/caddy`, plus `/mnt/data/users` and `/var/lib/paperless` automatically when enabled) while excluding bulk `/mnt/data/media` and regenerable caches/thumbnails. Configured `/mnt/data` mount-check guard, retention (`pruneOpts`: 7 daily / 4 weekly / 12 monthly / 3 yearly), integrity verification (`checkOpts`: `--with-cache --read-data-subset=500M`), and cgroup CPU/I/O/RAM limits (`GOMEMLIMIT=1200MiB`). Verified initial full upload (`284 GiB`), unattended scheduled `03:15` incremental run, and 3-second test restore of `/mnt/data/backups/postgres` to `/tmp`.
