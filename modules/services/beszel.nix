@@ -104,6 +104,9 @@ in
     enable = true;
     openFirewall = false;
     environmentFile = agentEnvFile;
+    # Enable standby-safe S.M.A.R.T. monitoring (Beszel invokes smartctl with
+    # `-n standby` and serves cached data while HDDs are spun down).
+    smartmon.enable = true;
     extraPath = [
       pkgs.intel-gpu-tools
       pkgs.systemd
@@ -113,9 +116,7 @@ in
       # Monitor the MergerFS pool and individual array drives alongside NVMe root.
       # statfs() reads cached superblock metadata and does not wake sleeping HDDs.
       EXTRA_FILESYSTEMS = "/mnt/data__DataPool,/mnt/disk1__Disk1,/mnt/parity1__Parity1";
-      # Keep Beszel's SMART polling disabled so it never wakes spun-down HDDs
-      # (standby-safe smartd with `-n standby,q` already monitors disk health).
-      SMART_DEVICES = "";
+      SMART_INTERVAL = "1h";
     };
   };
 
@@ -131,22 +132,28 @@ in
       "mnt-data.mount"
     ];
     serviceConfig = {
-      # Allow reading systemd-journal service logs and Intel iGPU telemetry (intel_gpu_top).
+      # Allow reading systemd-journal logs, Intel iGPU telemetry (intel_gpu_top),
+      # and SATA/NVMe S.M.A.R.T. attributes (smartctl -n standby).
       SupplementaryGroups = [
         "systemd-journal"
         "video"
         "render"
+        "disk"
       ];
       NoNewPrivileges = lib.mkForce false;
       PrivateUsers = lib.mkForce false;
       PrivateDevices = lib.mkForce false;
-      DeviceAllow = [
-        "/dev/dri/card0 rw"
-        "/dev/dri/card1 rw"
-        "/dev/dri/renderD128 rw"
+      DevicePolicy = lib.mkForce "auto";
+      AmbientCapabilities = lib.mkForce [
+        "CAP_PERFMON"
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
       ];
-      AmbientCapabilities = lib.mkForce [ "CAP_PERFMON" ];
-      CapabilityBoundingSet = lib.mkForce [ "CAP_PERFMON" ];
+      CapabilityBoundingSet = lib.mkForce [
+        "CAP_PERFMON"
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
+      ];
       SystemCallFilter = lib.mkForce [ "@system-service" "perf_event_open" ];
       MemoryHigh = "128M";
       MemoryMax = "256M";

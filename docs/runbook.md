@@ -731,7 +731,7 @@ sudo systemctl start jellyfin
 
 - **Metrics**: CPU, RAM/zram, load, network, temperatures, Intel QuickSync GPU (`intel_gpu_top`), NVMe root + `/mnt/data` / `/mnt/disk1` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
 - **Logs**: Click any systemd service inside the `younix` host view to inspect its `journald` logs directly in the UI.
-- **HDD spindown safety**: Beszel's built-in SMART polling is explicitly disabled (`SMART_DEVICES=""`) so sleeping HDDs are never woken; `smartd -n standby,q` remains the single source of truth for disk health.
+- **HDD spindown safety**: Beszel polls S.M.A.R.T. every `1h` using `smartctl -n standby` and serves cached attributes while drives are spun down, so sleeping HDDs are not woken; `smartd -n standby,q` continues running scheduled Short/Long self-tests.
 
 ### One-Time First-Run Setup (in Browser)
 
