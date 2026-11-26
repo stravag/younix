@@ -4,9 +4,54 @@ let
   cfg = config.younix.alerts;
   ntfyEnvFile = config.sops.templates."ntfy.env".path;
 
-  # Reusable CLI helper for sending ntfy.sh notifications using sops-decrypted
-  # credentials. Accepts `--title`, `--priority`, `--tags`, and either a message
-  # argument or stdin.
+  # ===========================================================================
+  # Alert Policy — what triggers ntfy.sh notifications & their priority
+  #
+  # Priorities: min | low | default | high | urgent
+  # ===========================================================================
+
+  # 1. Systemd services monitored via OnFailure= (alerts include last 25 log lines)
+  monitoredServices =
+    {
+      # Storage & SnapRAID parity (unmounted drives, >100 deletions, sync/scrub errors)
+      snapraid-precheck = { priority = "high"; tags = "rotating_light,warning"; };
+      snapraid-sync     = { priority = "high"; tags = "rotating_light,warning"; };
+      snapraid-scrub    = { priority = "high"; tags = "rotating_light,warning"; };
+
+      # Offsite Backblaze B2 backups (upload, prune, or integrity check errors)
+      restic-backups-offsite = { priority = "high"; tags = "rotating_light,warning"; };
+
+      # Core daemons (if the daemon itself crashes)
+      comin  = { priority = "high"; tags = "rotating_light,warning"; };
+      smartd = { priority = "high"; tags = "rotating_light,warning"; };
+    }
+    # Local PostgreSQL dumps (when PostgreSQL is enabled)
+    // lib.optionalAttrs config.services.postgresql.enable {
+      postgresqlBackup         = { priority = "high"; tags = "rotating_light,warning"; };
+      younix-postgres-hdd-sync = { priority = "high"; tags = "rotating_light,warning"; };
+    }
+    # Any additional services added via `younix.alerts.extraMonitoredUnits`
+    // lib.genAttrs cfg.extraMonitoredUnits (_: {
+      priority = "high";
+      tags = "rotating_light,warning";
+    });
+
+  # 2. S.M.A.R.T. disk health alerts (smartd -M exec on all SATA HDDs & NVMe SSDs)
+  smartdAlert = {
+    priority = "urgent";
+    tags = "rotating_light,cd";
+  };
+
+  # 3. GitOps deployment alerts (comin postBuild & postDeployment hooks)
+  cominAlerts = {
+    failure = { priority = "high"; tags = "rotating_light,warning"; };
+    success = { priority = "low";  tags = "white_check_mark,rocket"; };
+  };
+
+  # ===========================================================================
+  # Implementation (ntfy.sh sender, hooks, and systemd wiring)
+  # ===========================================================================
+
   younixNotifyBin = pkgs.writeShellScriptBin "younix-notify" ''
     set -euo pipefail
 
@@ -16,29 +61,12 @@ let
 
     while [ "$#" -gt 0 ]; do
       case "$1" in
-        --title)
-          title="$2"
-          shift 2
-          ;;
-        --priority)
-          priority="$2"
-          shift 2
-          ;;
-        --tags)
-          tags="$2"
-          shift 2
-          ;;
-        --)
-          shift
-          break
-          ;;
-        -*)
-          echo "Unknown option: $1" >&2
-          exit 2
-          ;;
-        *)
-          break
-          ;;
+        --title)    title="$2";    shift 2 ;;
+        --priority) priority="$2"; shift 2 ;;
+        --tags)     tags="$2";     shift 2 ;;
+        --)         shift; break ;;
+        -*)         echo "Unknown option: $1" >&2; exit 2 ;;
+        *)          break ;;
       esac
     done
 
@@ -63,8 +91,8 @@ let
       exit 1
     fi
 
-    # Keep payload under ntfy.sh's 4096-byte inline message limit so mobile clients
-    # render the alert directly instead of turning it into a text file attachment.
+    # Keep payload under ntfy.sh's 4096-byte inline message limit so mobile apps
+    # render the alert inline instead of turning it into a text file attachment.
     if [ "''${#body}" -gt 3800 ]; then
       body="$(printf '%s' "$body" | ${pkgs.coreutils}/bin/head -c 3750)"
       body="$body
@@ -72,17 +100,12 @@ let
     fi
 
     curl_args=(
-      --fail
-      --silent
-      --show-error
-      --max-time 15
-      --retry 2
-      --retry-delay 3
+      --fail --silent --show-error
+      --max-time 15 --retry 2 --retry-delay 3
       -H "Title: $title"
       -H "Priority: $priority"
       -H "Tags: $tags"
     )
-
     if [ -n "''${NTFY_TOKEN:-}" ]; then
       curl_args+=(-H "Authorization: Bearer $NTFY_TOKEN")
     fi
@@ -90,12 +113,22 @@ let
     printf '%s' "$body" | ${pkgs.curl}/bin/curl "''${curl_args[@]}" --data-binary @- "$NTFY_URL" > /dev/null
   '';
 
-  # Invoked by younix-notify@.service via systemd OnFailure=younix-notify@%n.service
   unitFailureScript = pkgs.writeShellScript "younix-unit-failure-notify" ''
     set -euo pipefail
 
     unit="''${1:-unknown}"
     host=${lib.escapeShellArg config.networking.hostName}
+
+    priority="high"
+    tags="rotating_light,warning"
+    case "$unit" in
+      ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: rule: ''
+        ${name}|${name}.service)
+          priority=${lib.escapeShellArg rule.priority}
+          tags=${lib.escapeShellArg rule.tags}
+          ;;
+      '') monitoredServices)}
+    esac
 
     result="$(${pkgs.systemd}/bin/systemctl show --property=Result --value "$unit" 2>/dev/null || echo unknown)"
     exit_code="$(${pkgs.systemd}/bin/systemctl show --property=ExecMainStatus --value "$unit" 2>/dev/null || echo unknown)"
@@ -110,11 +143,10 @@ $logs"
 
     printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
       --title "$host: $unit failed" \
-      --priority high \
-      --tags "rotating_light,warning"
+      --priority "$priority" \
+      --tags "$tags"
   '';
 
-  # Invoked by smartd via `-m root -M exec <script>` on SMART warnings/errors.
   smartdNotifyScript = pkgs.writeShellScript "younix-smartd-notify" ''
     set -euo pipefail
 
@@ -123,8 +155,8 @@ $logs"
     failtype="''${SMARTD_FAILTYPE:-alert}"
     body="''${SMARTD_FULLMESSAGE:-''${SMARTD_MESSAGE:-SMART warning triggered on $device}}"
 
-    priority="urgent"
-    tags="rotating_light,cd"
+    priority=${lib.escapeShellArg smartdAlert.priority}
+    tags=${lib.escapeShellArg smartdAlert.tags}
     if [ "$failtype" = "EmailTest" ]; then
       priority="default"
       tags="white_check_mark,cd"
@@ -136,7 +168,6 @@ $logs"
       --tags "$tags"
   '';
 
-  # Invoked by comin after build and deployment attempts; alerts only on failures.
   cominNotifyScript = pkgs.writeShellScript "younix-comin-notify" ''
     set -euo pipefail
 
@@ -162,25 +193,9 @@ $err"
 
     printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
       --title "$host: comin $phase failed ($short_sha)" \
-      --priority high \
-      --tags "rotating_light,warning"
+      --priority ${lib.escapeShellArg cominAlert.priority} \
+      --tags ${lib.escapeShellArg cominAlert.tags}
   '';
-
-  defaultMonitoredUnits =
-    [
-      "snapraid-precheck"
-      "snapraid-sync"
-      "snapraid-scrub"
-      "restic-backups-offsite"
-      "comin"
-      "smartd"
-    ]
-    ++ lib.optionals config.services.postgresql.enable [
-      "postgresqlBackup"
-      "younix-postgres-hdd-sync"
-    ];
-
-  allMonitoredUnits = lib.unique (defaultMonitoredUnits ++ cfg.extraMonitoredUnits);
 in
 {
   options.younix.alerts = {
@@ -203,24 +218,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    environment.systemPackages = [
-      younixNotifyBin
-    ];
+    environment.systemPackages = [ younixNotifyBin ];
 
     # Encrypted ntfy.sh topic URL and optional access token from secrets/secrets.yaml.
     # Leave `ntfy.token` as "" if using a secret unauthenticated topic URL.
-    sops.secrets."ntfy/url" = {
-      owner = "root";
-      group = "root";
-      mode = "0400";
-    };
-
-    sops.secrets."ntfy/token" = {
-      owner = "root";
-      group = "root";
-      mode = "0400";
-    };
-
+    sops.secrets."ntfy/url" = { owner = "root"; group = "root"; mode = "0400"; };
+    sops.secrets."ntfy/token" = { owner = "root"; group = "root"; mode = "0400"; };
     sops.templates."ntfy.env" = {
       owner = "root";
       group = "root";
@@ -231,8 +234,7 @@ in
       '';
     };
 
-    # Disable NixOS's built-in smartd mail/wall/x11 wrappers so our custom
-    # `-m root -M exec ${smartdNotifyScript}` directive in modules/storage.nix is used cleanly.
+    # Disable NixOS's built-in smartd wrappers so our custom `-m root -M exec` hook is used.
     services.smartd.notifications = {
       mail.enable = false;
       wall.enable = false;
@@ -245,7 +247,7 @@ in
       postDeploymentCommand = "${cominNotifyScript}";
     };
 
-    # Reusable systemd failure notifier template + OnFailure wiring for critical units.
+    # Reusable systemd failure notifier template + OnFailure wiring for every monitored service.
     systemd.services =
       {
         "younix-notify@" = {
@@ -258,8 +260,8 @@ in
           };
         };
       }
-      // lib.genAttrs allMonitoredUnits (_: {
+      // lib.mapAttrs (_: _: {
         unitConfig.OnFailure = [ "younix-notify@%n.service" ];
-      });
+      }) monitoredServices;
   };
 }
