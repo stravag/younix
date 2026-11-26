@@ -78,17 +78,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 4 — Backups, Observability & CI
 
-### T-019 — System health & failure notifications
-- **Status**: `in-progress`
-- **Depends on**: `T-006`
-- **Decision**: `ntfy.sh` (topic URL + optional access token encrypted in `secrets/secrets.yaml` via `sops-nix`).
-- **Scope**:
-  - [x] Create `modules/alerts.nix` with `younix-notify` CLI and reusable systemd `OnFailure=` unit (`younix-notify@.service`).
-  - [x] Wire alerts to: `smartd` warnings (`-m root -M exec`), SnapRAID precheck/sync/scrub failures, PostgreSQL dump + `restic` backup failures, and `comin` build/deployment failures.
-  - [ ] Add `ntfy.url` / `ntfy.token` to `secrets/secrets.yaml`, deploy via `comin`, and verify delivery on phone/Mac.
-- **Verification**:
-  - Trigger a test notification (`sudo younix-notify ...` and `sudo systemctl start 'younix-notify@restic-backups-offsite.service'`) and confirm delivery on phone/Mac.
-
 ### T-020 — GitHub Actions CI for NixOS config validation
 - **Status**: `ready`
 - **Depends on**: none
@@ -225,3 +214,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/leds.nix`, `docs/runbook.md`, `README.md`
 - **Summary**: Extended `younix-leds` to poll drive power state via standby-safe `hdparm -C` (showing dim blue for spun-down bays and white + I/O blink for active bays without waking sleeping HDDs), show red on SMART/offline faults, and switch the Power LED to steady amber when any configured array mountpoint is missing. Verified active/standby transitions live on `younix` alongside `hd-idle` and documented the LED legend in `docs/runbook.md`.
+
+### T-019 — System health & failure notifications (`ntfy.sh`)
+- **Status**: `done`
+- **Artifacts**: `modules/alerts.nix`, `modules/storage.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
+- **Summary**: Deployed `ntfy.sh` push failure alerts with topic URL and optional access token encrypted in `secrets/secrets.yaml` (`ntfy/url`, `ntfy/token` → `/run/secrets/rendered/ntfy.env`). Added `younix-notify` CLI (with 4 KB inline payload truncation) and reusable `younix-notify@.service` (`OnFailure=younix-notify@%n.service` with unit exit status and last 25 `journalctl` lines) wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`. Wired `smartd` S.M.A.R.T. warnings (`-m root -M exec`, `urgent` priority) and `comin` `postBuildCommand` / `postDeploymentCommand` failure hooks (`COMIN_STATUS=failed`). Verified live delivery of `younix: restic-backups-offsite failed` on phone/Mac and confirmed `smartd` monitoring all 4 drives cleanly.
