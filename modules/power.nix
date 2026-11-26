@@ -12,11 +12,14 @@
     "pcie_aspm.policy=powersave"
   ];
 
-  # Enable PCI and USB runtime power management so idle controllers — including
-  # the unplugged Marvell 10GbE NIC (enp2s0) — drop into low-power D3 states.
-  # Exclude USB HID devices so a recovery keyboard never sleeps during maintenance.
+  # Enable PCI and USB runtime power management for idle controllers, while:
+  # - Keeping SATA/AHCI controllers (PCI class 0x0106*) at `on`, since resuming
+  #   the ASM1164 controller from PCI D3 resets SATA links and spins up sleeping
+  #   HDDs without block I/O (leaving hd-idle thinking they are still in standby).
+  # - Excluding USB HID devices so a recovery keyboard never sleeps.
   services.udev.extraRules = ''
-    ACTION=="add", SUBSYSTEM=="pci", TEST=="power/control", ATTR{power/control}="auto"
+    ACTION=="add", SUBSYSTEM=="pci", ATTR{class}!="0x0106*", TEST=="power/control", ATTR{power/control}="auto"
+    ACTION=="add|change", SUBSYSTEM=="pci", ATTR{class}=="0x0106*", TEST=="power/control", ATTR{power/control}="on"
     ACTION=="add", SUBSYSTEM=="usb", TEST=="power/control", ATTR{bDeviceClass}!="03", ATTR{power/control}="auto"
   '';
 
