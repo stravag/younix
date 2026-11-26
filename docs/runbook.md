@@ -901,7 +901,7 @@ sudo hdparm -C /dev/sd?   # verify sleeping drives stay in standby while bay LED
 - **`younix-notify`** — CLI helper reading `/run/secrets/rendered/ntfy.env` (`ntfy/url` and optional `ntfy/token` from `secrets/secrets.yaml`).
 - **`younix-notify@.service`** — Reusable systemd `OnFailure=younix-notify@%n.service` template unit attaching the failed unit's exit status and last 25 journal lines. Wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`.
 - **`smartd`** — Executes `younix-smartd-notify` via `-m root -M exec` on S.M.A.R.T. warnings/errors (`urgent` priority).
-- **`comin`** — Runs `younix-comin-notify` via `postBuildCommand` and `postDeploymentCommand`, alerting only when `COMIN_STATUS=failed`.
+- **`comin`** — Runs `younix-comin-notify` via `postBuildCommand` and `postDeploymentCommand`: sends a `high` alert on build/deploy failures (`COMIN_STATUS=failed`) and a `low` info notification on successful deployments (`COMIN_PHASE=deploy`, `COMIN_STATUS=done`).
 
 ### Secrets Setup (in `secrets/secrets.yaml` on macOS)
 

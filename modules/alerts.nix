@@ -171,30 +171,38 @@ $logs"
   cominNotifyScript = pkgs.writeShellScript "younix-comin-notify" ''
     set -euo pipefail
 
-    if [ "''${COMIN_STATUS:-}" != "failed" ]; then
-      exit 0
-    fi
-
     host="''${COMIN_HOSTNAME:-younix}"
     phase="''${COMIN_PHASE:-deploy}"
+    status="''${COMIN_STATUS:-}"
     ref="''${COMIN_GIT_REF:-unknown}"
     sha="''${COMIN_GIT_SHA:-unknown}"
     short_sha="''${sha:0:8}"
     commit_subject="$(printf '%s\n' "''${COMIN_GIT_MSG:-}" | ${pkgs.coreutils}/bin/head -n 1)"
-    err="''${COMIN_ERROR_MSG:-No error message provided (check journalctl -u comin)}"
 
-    message="Host: $host
+    if [ "$status" = "failed" ]; then
+      err="''${COMIN_ERROR_MSG:-No error message provided (check journalctl -u comin)}"
+      message="Host: $host
 Phase: $phase
 Branch: $ref ($short_sha)
 Commit: $commit_subject
 
 Error:
 $err"
-
-    printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
-      --title "$host: comin $phase failed ($short_sha)" \
-      --priority ${lib.escapeShellArg cominAlert.priority} \
-      --tags ${lib.escapeShellArg cominAlert.tags}
+      printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
+        --title "$host: comin $phase failed ($short_sha)" \
+        --priority ${lib.escapeShellArg cominAlerts.failure.priority} \
+        --tags ${lib.escapeShellArg cominAlerts.failure.tags}
+    elif [ "$phase" = "deploy" ] && [ "$status" = "done" ]; then
+      gen="''${COMIN_GENERATION:-unknown}"
+      message="Host: $host
+Generation: $gen
+Branch: $ref ($short_sha)
+Commit: $commit_subject"
+      printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
+        --title "$host: deployed gen $gen ($short_sha)" \
+        --priority ${lib.escapeShellArg cominAlerts.success.priority} \
+        --tags ${lib.escapeShellArg cominAlerts.success.tags}
+    fi
   '';
 in
 {
