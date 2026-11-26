@@ -33,6 +33,7 @@
           ./modules/graphics.nix
           ./modules/storage.nix
           ./modules/backups.nix
+          ./modules/alerts.nix
           ./modules/samba.nix
           ./modules/remote-access.nix
           ./modules/proxy.nix

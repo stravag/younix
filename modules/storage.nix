@@ -284,7 +284,9 @@ in
   services.smartd = {
     enable = true;
     autodetect = true;
-    defaults.autodetected = "-a -o on -S on -n standby,q -s (S/../../6/04|L/../01/./04)";
+    defaults.autodetected =
+      "-a -o on -S on -n standby,q -s (S/../../6/04|L/../01/./04)"
+      + lib.optionalString (config.younix.alerts.enable or false) " ${config.younix.alerts.smartdFlags}";
   };
 
   # Spin down idle array HDDs after inactivity for quieter acoustics & lower idle power.

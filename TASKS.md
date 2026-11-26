@@ -79,14 +79,15 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 4 — Backups, Observability & CI
 
 ### T-019 — System health & failure notifications
-- **Status**: `needs-decision`
+- **Status**: `in-progress`
 - **Depends on**: `T-006`
-- **Open decision**: Choose notification channel (e.g., `ntfy.sh`, Pushover, Telegram bot, Discord webhook, or SMTP email).
+- **Decision**: `ntfy.sh` (topic URL + optional access token encrypted in `secrets/secrets.yaml` via `sops-nix`).
 - **Scope**:
-  - Create `modules/alerts.nix` with a reusable systemd `OnFailure=` notification unit.
-  - Wire alerts to: `smartd` warnings, scrub failures, `restic` backup failures, and `comin` deployment failures.
+  - [x] Create `modules/alerts.nix` with `younix-notify` CLI and reusable systemd `OnFailure=` unit (`younix-notify@.service`).
+  - [x] Wire alerts to: `smartd` warnings (`-m root -M exec`), SnapRAID precheck/sync/scrub failures, PostgreSQL dump + `restic` backup failures, and `comin` build/deployment failures.
+  - [ ] Add `ntfy.url` / `ntfy.token` to `secrets/secrets.yaml`, deploy via `comin`, and verify delivery on phone/Mac.
 - **Verification**:
-  - Trigger a test notification and confirm delivery on phone/Mac.
+  - Trigger a test notification (`sudo younix-notify ...` and `sudo systemctl start 'younix-notify@restic-backups-offsite.service'`) and confirm delivery on phone/Mac.
 
 ### T-020 — GitHub Actions CI for NixOS config validation
 - **Status**: `ready`
@@ -119,17 +120,17 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - Complete the disk-failure drill following only the simplified runbook (no LLM assistance) with zero data loss and `snapraid status` reporting clean.
 
-### T-023 — Enhanced front-panel LED states (standby color & status feedback)
-- **Status**: `in-progress`
-- **Depends on**: `T-004`, `T-008`
-- **Decision**: Active bays white + I/O blink, spun-down standby bays blue, SMART/offline fault red, Power LED steady white normally and steady amber when any configured array mountpoint is missing.
-- **Goal**: Make `younix-leds` (`modules/leds.nix`) convey richer hardware state at a glance—such as changing bay LED color/brightness when a drive is spun down (`hdparm -C` standby check without waking sleeping HDDs).
-- **Scope**:
-  - [x] Extend `younix-leds` in `modules/leds.nix` to detect drive power state (standby vs active/idle) using standby-safe polling (`hdparm -C`) and reflect it via bay LED RGB color/brightness.
-  - [x] Add degraded/unmounted array warning on the Power LED (amber if any configured array mountpoint is missing in `/proc/mounts`).
-  - [x] Document the LED color legend in `docs/runbook.md` and update `README.md`.
+### T-026 — Enable BIOS Native ASPM & verify Package C-states
+- **Status**: `ready`
+- **Depends on**: none
+- **Goal**: Enable Native/PCIe ASPM in the UGREEN DXP4800 Plus BIOS so `modules/power.nix` (`pcie_aspm.policy=powersave`) can unlock CPU Package C2–C8+ idle states.
+- **Already done**:
+  - [x] Switched Ethernet to the 2.5GbE Intel I226-V port (`enp5s0`).
+  - [x] Created `modules/power.nix` with `pcie_aspm.policy=powersave`, PCI/USB runtime PM (excluding SATA AHCI `0x0106*` so sleeping HDDs never wake on controller resume, and excluding USB HID), Intel HWP `balance_power` EPP, and `ethtool`.
+- **Manual steps**:
+  - [ ] Attach monitor & keyboard, enter UGREEN BIOS (`Ctrl+F12` at boot), and enable **Native ASPM / PCIe ASPM** (under *Advanced → Platform Misc* / *PCI Express*).
 - **Verification**:
-  - [ ] Confirm bay LEDs switch cleanly between active and spun-down states without waking sleeping drives, Power LED turns amber on unmounted array (if tested), and SMART/offline faults still show red.
+  - [ ] Confirm `sudo lspci -vv` shows `ASPM L1 Enabled` (instead of `ASPM Disabled`) and `sudo cat /sys/kernel/debug/pmc_core/package_cstate_show` reports non-zero Package C2–C8+ residency with zero AER/PCIe errors in `dmesg`.
 
 ---
 
@@ -219,3 +220,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/services/beszel.nix`, `flake.nix`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed lightweight native `services.beszel.hub` (`127.0.0.1:8090`) and `services.beszel.agent` (`127.0.0.1:45876`) behind Caddy HTTPS (`younix.proxy.routes.status` → `https://status.<domain>`, Tailscale-only, ~26 MB combined RAM peak) with passwordless `AUTO_LOGIN=admin@younix.local` and `SHARE_ALL_SYSTEMS=true` (ready for future Pocket-ID OIDC). Provisioned `younix` declaratively via `/var/lib/beszel-hub/beszel_data/config.yml` and auto-paired the local agent via `younix-beszel-agent-key.service`. Enabled Intel QuickSync GPU telemetry (`intel_gpu_top` + `CAP_PERFMON` + `perf_event_open`), systemd service status & per-service `journald` logs (`systemd-journal`), extra filesystems (`/mnt/data`, `/mnt/disk1`, `/mnt/parity1`), and standby-safe S.M.A.R.T. monitoring (`smartmon.enable = true`, `SMART_INTERVAL = "1h"`, `tags = [ ]` override working around the nixpkgs `testing` build-tag bug). Verified live metrics, Intel GPU, S.M.A.R.T. drives, systemd logs, and `/dev/sda` remaining in `standby`.
+
+### T-023 — Enhanced front-panel LED states (standby color & status feedback)
+- **Status**: `done`
+- **Artifacts**: `modules/leds.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Extended `younix-leds` to poll drive power state via standby-safe `hdparm -C` (showing dim blue for spun-down bays and white + I/O blink for active bays without waking sleeping HDDs), show red on SMART/offline faults, and switch the Power LED to steady amber when any configured array mountpoint is missing. Verified active/standby transitions live on `younix` alongside `hd-idle` and documented the LED legend in `docs/runbook.md`.

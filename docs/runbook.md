@@ -891,3 +891,37 @@ systemctl status younix-leds
 journalctl -u younix-leds -n 30
 sudo hdparm -C /dev/sd?   # verify sleeping drives stay in standby while bay LEDs show dim blue
 ```
+
+---
+
+## 15. System Health & Failure Notifications (`ntfy.sh`)
+
+`modules/alerts.nix` sends push alerts via **`ntfy.sh`** whenever a critical background job, disk health check, or GitOps deployment fails:
+
+- **`younix-notify`** — CLI helper reading `/run/secrets/rendered/ntfy.env` (`ntfy/url` and optional `ntfy/token` from `secrets/secrets.yaml`).
+- **`younix-notify@.service`** — Reusable systemd `OnFailure=younix-notify@%n.service` template unit attaching the failed unit's exit status and last 25 journal lines. Wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`.
+- **`smartd`** — Executes `younix-smartd-notify` via `-m root -M exec` on S.M.A.R.T. warnings/errors (`urgent` priority).
+- **`comin`** — Runs `younix-comin-notify` via `postBuildCommand` and `postDeploymentCommand`, alerting only when `COMIN_STATUS=failed`.
+
+### Secrets Setup (in `secrets/secrets.yaml` on macOS)
+
+```yaml
+ntfy:
+  url: https://ntfy.sh/<your-private-topic>
+  token: ""   # Optional ntfy.sh access token (tk_...) if using an authenticated topic
+```
+
+### Verification & Manual Test Commands
+
+```bash
+# 1. Send a direct test notification
+sudo younix-notify --title "younix test" --tags "white_check_mark" "Direct ntfy.sh test from younix"
+
+# 2. Test the systemd OnFailure template unit
+sudo systemctl start 'younix-notify@restic-backups-offsite.service'
+journalctl -u 'younix-notify@*' -n 20
+
+# 3. Verify smartd picked up the -M exec hook without errors
+systemctl status smartd
+journalctl -u smartd -n 20
+```
