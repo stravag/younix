@@ -124,7 +124,7 @@ in
       "younix-arr-dirs.service"
     ];
     serviceConfig = {
-      UMask = "0007";
+      UMask = lib.mkForce "0007";
       Nice = 5;
       IOSchedulingClass = "best-effort";
       IOSchedulingPriority = 6;
@@ -179,7 +179,7 @@ in
       "younix-arr-dirs.service"
     ];
     serviceConfig = {
-      UMask = "0007";
+      UMask = lib.mkForce "0007";
       MemoryHigh = "384M";
       MemoryMax = "768M";
     };
@@ -212,7 +212,7 @@ in
       "younix-arr-dirs.service"
     ];
     serviceConfig = {
-      UMask = "0007";
+      UMask = lib.mkForce "0007";
       MemoryHigh = "384M";
       MemoryMax = "768M";
     };
