@@ -44,8 +44,9 @@ let
 
   # 3. GitOps deployment alerts (comin postBuild & postDeployment hooks)
   cominAlerts = {
-    failure = { priority = "high"; tags = "rotating_light,warning"; };
-    success = { priority = "low";  tags = "white_check_mark,rocket"; };
+    failure        = { priority = "high";    tags = "rotating_light,warning"; };
+    rebootRequired = { priority = "default"; tags = "arrows_counterclockwise,warning"; };
+    success        = { priority = "low";     tags = "white_check_mark,rocket"; };
   };
 
   # ===========================================================================
@@ -194,14 +195,41 @@ $err"
         --tags ${lib.escapeShellArg cominAlerts.failure.tags}
     elif [ "$phase" = "deploy" ] && [ "$status" = "done" ]; then
       gen="''${COMIN_GENERATION:-unknown}"
+      reboot_reasons=()
+      for item in kernel initrd kernel-modules; do
+        booted="$(${pkgs.coreutils}/bin/readlink -f "/run/booted-system/$item" 2>/dev/null || true)"
+        current="$(${pkgs.coreutils}/bin/readlink -f "/run/current-system/$item" 2>/dev/null || true)"
+        if [ -n "$booted" ] && [ -n "$current" ] && [ "$booted" != "$current" ]; then
+          reboot_reasons+=("$item")
+        fi
+      done
+      if [ -r /run/booted-system/kernel-params ] && [ -r /run/current-system/kernel-params ] && \
+         ! ${pkgs.diffutils}/bin/cmp -s /run/booted-system/kernel-params /run/current-system/kernel-params; then
+        reboot_reasons+=("kernel-params")
+      fi
+
       message="Host: $host
 Generation: $gen
 Branch: $ref ($short_sha)
 Commit: $commit_subject"
-      printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
-        --title "$host: deployed gen $gen ($short_sha)" \
-        --priority ${lib.escapeShellArg cominAlerts.success.priority} \
-        --tags ${lib.escapeShellArg cominAlerts.success.tags}
+
+      if [ "''${#reboot_reasons[@]}" -gt 0 ]; then
+        changed="$(printf '%s, ' "''${reboot_reasons[@]}")"
+        changed="''${changed%, }"
+        message="$message
+
+Reboot required (changed: $changed).
+Run 'sudo reboot' on $host when convenient."
+        printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
+          --title "$host: deployed gen $gen — reboot required" \
+          --priority ${lib.escapeShellArg cominAlerts.rebootRequired.priority} \
+          --tags ${lib.escapeShellArg cominAlerts.rebootRequired.tags}
+      else
+        printf '%s' "$message" | ${younixNotifyBin}/bin/younix-notify \
+          --title "$host: deployed gen $gen ($short_sha)" \
+          --priority ${lib.escapeShellArg cominAlerts.success.priority} \
+          --tags ${lib.escapeShellArg cominAlerts.success.tags}
+      fi
     fi
   '';
 in
