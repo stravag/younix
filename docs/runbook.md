@@ -530,6 +530,34 @@ caddy:
 
 Saving, committing, and pushing automatically restarts `caddy.service` once `comin` deploys.
 
+### Split-Horizon LAN DNS (EdgeRouter X SFP)
+
+Public DNS (deSEC) resolves `*.<your-delegated-subdomain>` to `younix`'s Tailscale IP (`100.x.y.z`) for remote access.
+To access the same HTTPS URLs on the home LAN **without** Tailscale, DNS forwarding (`dnsmasq`) is enabled on the
+EdgeRouter X SFP with a wildcard override pointing to `younix`'s static DHCP LAN IP, and the LAN DHCP server hands out
+the router itself as the sole DNS server (forwarding upstream to Cloudflare `1.1.1.1` / `1.0.0.1`):
+
+```bash
+configure
+set service dns forwarding listen-on switch0
+set service dns forwarding cache-size 1000
+set service dns forwarding name-server 1.1.1.1
+set service dns forwarding name-server 1.0.0.1
+set service dns forwarding options address=/<your-delegated-subdomain>/<younix-lan-ip>
+
+delete service dhcp-server shared-network-name LAN subnet <lan-subnet> dns-server
+set service dhcp-server shared-network-name LAN subnet <lan-subnet> dns-server <router-lan-ip>
+
+commit
+save
+exit
+```
+
+- **ACME safety:** Caddy's DNS-01 challenge in `modules/proxy.nix` explicitly queries `1.1.1.1` and `9.9.9.9`, so the
+  local router override never interferes with wildcard certificate renewal.
+- **No secondary external DNS in DHCP:** Keep only `<router-lan-ip>` in DHCP `dns-server`; adding a public secondary DNS
+  causes LAN clients to intermittently resolve the Tailscale IP instead of `<younix-lan-ip>`.
+
 ### Diagnostics
 
 ```bash
