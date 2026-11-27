@@ -63,7 +63,7 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 ## Phase 4 — Backups, Observability & CI
 
 ### T-020 — GitHub Actions CI & Dependabot for NixOS flake updates
-- **Status**: `ready`
+- **Status**: `in-progress`
 - **Depends on**: none
 - **Goal**: Catch Nix syntax/evaluation/build errors in CI before `comin` pulls broken commits, and automate weekly flake input update PRs via GitHub Dependabot.
 - **Scope**:

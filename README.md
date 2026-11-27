@@ -11,6 +11,8 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 ## Layout
 
 - `flake.nix` — Flake inputs (`nixpkgs`, `nixpkgs-unstable`, `comin`, `sops-nix`) and host definitions.
+- `.github/workflows/check.yml` — GitHub Actions CI running `nix flake check` and building the full `younix` NixOS toplevel on pushes and PRs.
+- `.github/dependabot.yml` — Weekly grouped Dependabot PRs for `flake.lock` inputs (`nix`) and `github-actions`.
 - `.sops.yaml` — `sops` encryption rules & public `age` recipients (macOS admin + `younix`).
 - `hosts/younix/configuration.nix` — Host-specific system configuration.
 - `hosts/younix/hardware-configuration.nix` — Hardware & root filesystem definitions generated on the NAS.
