@@ -33,6 +33,17 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
+### T-027 — Web file browser (`FileBrowser Quantum`)
+- **Status**: `in-progress`
+- **Depends on**: `T-011`, `T-012`
+- **Goal**: Deploy FileBrowser Quantum v2 natively behind Caddy HTTPS (`https://files.<domain>`) for remote browser-based access to `/mnt/data/{share,media,photos}` without needing SMB, with Samba-compatible group permissions, standby-safe indexing, and future Pocket-ID OIDC readiness.
+- **Scope**:
+  - Create `modules/services/filebrowser.nix` pulling `filebrowser-quantum` v2.x from `nixpkgs-unstable` with NVMe SQLite DB & cache (`/var/lib/filebrowser-quantum`, `/var/cache/filebrowser-quantum`), `UMask = "0007"` + `share`/`media`/`photos` group memberships, unindexed standby-safe sources (`folderPath: "/"`, `viewable: true`), `noauth` behind LAN + Tailscale Caddy HTTPS, and `younix.proxy.routes.files`.
+  - Register `modules/services/filebrowser.nix` in `flake.nix` and update `README.md`.
+- **Verification**:
+  - Deploy via `comin` and confirm `filebrowser-quantum.service` starts cleanly with no config errors.
+  - Browse `https://files.<domain>`, upload a test file to `Share`, verify it appears writable over macOS Samba with `root:share` / `0660` permissions, and confirm HDDs remain in standby when idle.
+
 ### T-016 — Paperless-ngx document management
 - **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`

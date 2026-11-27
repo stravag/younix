@@ -40,6 +40,7 @@
           ./modules/services/jellyfin.nix
           ./modules/services/immich.nix
           ./modules/services/beszel.nix
+          ./modules/services/filebrowser.nix
         ];
       };
     };
