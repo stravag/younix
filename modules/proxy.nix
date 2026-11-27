@@ -8,7 +8,7 @@ let
   # issued and renewed automatically without opening any public ports.
   caddyWithDesec = pkgs.caddy.withPlugins {
     plugins = [ "github.com/caddy-dns/desec@v1.1.0" ];
-    hash = "sha256-HrLRezw+q5+dRdJS662686n7xsImSxNb3UqlSo61R8E=";
+    hash = "sha256-Ha0Rmc9946Er9rT1qc0FxlglIjjYutDOras0LzKUf2M=";
   };
 
   mkRouteBlock = name: route: ''
