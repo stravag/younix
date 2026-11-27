@@ -29,6 +29,56 @@ let
           - admin@younix.local
   '';
 
+  # Standby-safe `smartctl` wrapper for beszel-agent.
+  # On the DXP4800 Plus (ASMedia ASM1164 + WD Red Plus), beszel-agent's hourly
+  # SMART poll wakes sleeping SATA HDDs without generating block I/O (leaving
+  # hd-idle thinking they are still spun down). Before invoking real smartctl on
+  # any /dev/sd* device, check power state via `hdparm -C` (ATA CHECK POWER MODE,
+  # which never wakes sleeping drives); if in standby/sleeping, return smartctl's
+  # standard standby response (exit 2) so Beszel keeps its cached SMART readings
+  # without spinning up the drive. Also rewrite `--scan-open` to `--scan` so
+  # device discovery never opens/wakes sleeping SATA disks.
+  standbySafeSmartctl = pkgs.writeShellScriptBin "smartctl" ''
+    set -euo pipefail
+
+    json_mode=0
+    sata_dev=""
+    args=()
+
+    for arg in "$@"; do
+      case "$arg" in
+        --scan-open)
+          args+=("--scan")
+          ;;
+        -j|--json|--json=*)
+          json_mode=1
+          args+=("$arg")
+          ;;
+        /dev/sd[a-z]*)
+          sata_dev="$arg"
+          args+=("$arg")
+          ;;
+        *)
+          args+=("$arg")
+          ;;
+      esac
+    done
+
+    if [ -n "$sata_dev" ] && [ -b "$sata_dev" ]; then
+      power_out="$(${pkgs.hdparm}/bin/hdparm -C "$sata_dev" 2>/dev/null || true)"
+      if ${pkgs.gnugrep}/bin/grep -qiE 'drive state is:.*(standby|sleeping)' <<< "$power_out"; then
+        if [ "$json_mode" -eq 1 ]; then
+          printf '{"json_format_version":[1,0],"smartctl":{"exit_status":2,"messages":[{"string":"Device is in STANDBY mode, exit(2)","severity":"info"}]}}\n'
+        else
+          echo "Device is in STANDBY mode, exit(2)"
+        fi
+        exit 2
+      fi
+    fi
+
+    exec ${pkgs.smartmontools}/bin/smartctl "''${args[@]}"
+  '';
+
   # Wait for beszel-hub to generate its local Ed25519 keypair under /var/lib/beszel-hub
   # and write KEY="<pubkey>" into /run/beszel-agent/hub.env so the local agent pairs
   # automatically without manual key copy-pasting or committing keys to git.
@@ -131,6 +181,8 @@ in
   };
 
   systemd.services.beszel-agent = {
+    # Prepend our standby-safe smartctl wrapper ahead of pkgs.smartmontools in PATH
+    path = lib.mkBefore [ standbySafeSmartctl ];
     after = [
       "beszel-hub.service"
       "younix-beszel-agent-key.service"
