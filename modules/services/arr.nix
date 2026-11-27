@@ -106,8 +106,9 @@ in
         port = 8080;
         download_dir = incompleteDir;
         complete_dir = completeDir;
-        # Match Samba's group-writable 0660/2770 model for /mnt/data/media
-        permissions = "660";
+        # Match Samba's group-writable model for /mnt/data/media: SABnzbd
+        # applies this mode to folders (770) and strips the execute bit on files (660).
+        permissions = "770";
       };
     };
   };
