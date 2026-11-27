@@ -109,18 +109,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Verification**:
   - Complete the disk-failure drill following only the simplified runbook (no LLM assistance) with zero data loss and `snapraid status` reporting clean.
 
-### T-026 — Enable BIOS Native ASPM & verify Package C-states
-- **Status**: `ready`
-- **Depends on**: none
-- **Goal**: Enable Native/PCIe ASPM in the UGREEN DXP4800 Plus BIOS so `modules/power.nix` (`pcie_aspm.policy=powersave`) can unlock CPU Package C2–C8+ idle states.
-- **Already done**:
-  - [x] Switched Ethernet to the 2.5GbE Intel I226-V port (`enp5s0`).
-  - [x] Created `modules/power.nix` with `pcie_aspm.policy=powersave`, PCI/USB runtime PM (excluding SATA AHCI `0x0106*` so sleeping HDDs never wake on controller resume, and excluding USB HID), Intel HWP `balance_power` EPP, and `ethtool`.
-- **Manual steps**:
-  - [ ] Attach monitor & keyboard, enter UGREEN BIOS (`Ctrl+F12` at boot), and enable **Native ASPM / PCIe ASPM** (under *Advanced → Platform Misc* / *PCI Express*).
-- **Verification**:
-  - [ ] Confirm `sudo lspci -vv` shows `ASPM L1 Enabled` (instead of `ASPM Disabled`) and `sudo cat /sys/kernel/debug/pmc_core/package_cstate_show` reports non-zero Package C2–C8+ residency with zero AER/PCIe errors in `dmesg`.
-
 ---
 
 ## Completed
@@ -219,3 +207,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/alerts.nix`, `modules/storage.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed `ntfy.sh` push failure alerts with topic URL and optional access token encrypted in `secrets/secrets.yaml` (`ntfy/url`, `ntfy/token` → `/run/secrets/rendered/ntfy.env`). Added `younix-notify` CLI (with 4 KB inline payload truncation) and reusable `younix-notify@.service` (`OnFailure=younix-notify@%n.service` with unit exit status and last 25 `journalctl` lines) wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`. Wired `smartd` S.M.A.R.T. warnings (`-m root -M exec`, `urgent` priority) and `comin` `postBuildCommand` / `postDeploymentCommand` failure hooks (`COMIN_STATUS=failed`). Verified live delivery of `younix: restic-backups-offsite failed` on phone/Mac and confirmed `smartd` monitoring all 4 drives cleanly.
+
+### T-026 — Idle power optimization & BIOS PCIe ASPM
+- **Status**: `done`
+- **Artifacts**: `modules/power.nix`, `modules/services/beszel.nix`, `flake.nix`, `README.md`
+- **Summary**: Switched Ethernet to the 2.5GbE Intel I226-V port (`enp4s0`) and disabled the unused 10GbE Marvell AQC113 (`Onboard LAN 1`) in the UGREEN BIOS (`Ctrl+F1` advanced menu), alongside enabling CPU C-states and PCIe ASPM across all root ports. Added `modules/power.nix` (`pcie_aspm.policy=powersave`, PCI/USB runtime PM excluding SATA AHCI `0x0106*` and USB HID, Intel HWP `balance_power` EPP, and `ethtool`) and wrapped `smartctl` in `modules/services/beszel.nix` with a standby-safe `hdparm -C` check + `--scan-open` → `--scan` rewrite so Beszel's hourly S.M.A.R.T. poll never wakes sleeping HDDs. Verified all 4 PCIe root ports and devices report `ASPM L1` / `L0s L1 Enabled` with zero AER/PCIe/SATA errors, CPU package idles at `0.75 W` (RAPL), and both HDDs remain in `standby` across `beszel-agent` restarts.
