@@ -62,17 +62,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 4 — Backups, Observability & CI
 
-### T-020 — GitHub Actions CI & Dependabot for NixOS flake updates
-- **Status**: `in-progress`
-- **Depends on**: none
-- **Goal**: Catch Nix syntax/evaluation/build errors in CI before `comin` pulls broken commits, and automate weekly flake input update PRs via GitHub Dependabot.
-- **Scope**:
-  - Add `.github/workflows/check.yml` running `nix flake check` and `nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link` on pushes and PRs.
-  - Add `.github/dependabot.yml` tracking `package-ecosystem: "nix"` (grouped weekly `flake.lock` update PRs) and `package-ecosystem: "github-actions"`.
-- **Verification**:
-  - Push workflow and verify green run in GitHub Actions.
-  - Trigger Dependabot check on GitHub (**Insights → Dependency graph → Dependabot**) and confirm a `flake.lock` update PR is created and validated by CI.
-
 ### T-021 — Backup & restore drill + simplified emergency runbook
 - **Status**: `ready`
 - **Depends on**: `T-017`, `T-018`
@@ -208,3 +197,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/services/filebrowser.nix`, `modules/samba.nix`, `flake.nix`, `README.md`
 - **Summary**: Deployed native FileBrowser Quantum v2 (`2.0.2-stable` from `nixpkgs-unstable`) on `127.0.0.1:8095` behind Caddy HTTPS (`https://files.<domain>`, LAN + Tailscale, passwordless `noauth` ready for future Pocket-ID OIDC). Exposed `/mnt/data/{share,media,photos}` with background indexing disabled (`folderPath: "/"`, `viewable: true`) to preserve `hd-idle` HDD spindown, NVMe-backed SQLite DB & cache (`/var/lib/filebrowser-quantum`, `/var/cache/filebrowser-quantum`), `ffmpeg` previews, `server.filesystem` `0660`/`2770` permissions, and hardened systemd limits (`MemoryHigh=256M`, `MemoryMax=512M`). Updated `younix-samba-dirs.service` in `modules/samba.nix` to enforce `root:<share>` + `2770` (setgid) across every mounted `/mnt/disk*` MergerFS branch so files created by non-Samba apps inherit the share group on all drives. Verified live browsing of Share/Media/Photos and `0660` group-writable file creation.
+
+### T-020 — GitHub Actions CI & Dependabot for NixOS flake updates
+- **Status**: `done`
+- **Artifacts**: `.github/workflows/check.yml`, `.github/dependabot.yml`, `README.md`
+- **Summary**: Added GitHub Actions CI (`.github/workflows/check.yml`) using `cachix/install-nix-action@v32` to run fast `nix flake check` on pushes to `main`/`testing-younix` (ignoring docs-only changes) and full `nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link` on pull requests and manual `workflow_dispatch` runs. Added `.github/dependabot.yml` for weekly Monday `06:00` (`Europe/Zurich`) grouped PRs tracking `nix` (`flake.lock`) and `github-actions`. Verified green CI runs on `main` and end-to-end Dependabot PR validation (catching a `caddy.withPlugins` hash mismatch on a Caddy `2.11.9` bump before `comin` could pull it).
