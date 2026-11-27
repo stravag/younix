@@ -31,14 +31,21 @@ For day-to-day administration and drive replacement procedures, see the [Operati
      diskutil eject /dev/diskX
      ```
 
-### 2. Disable the BIOS watchdog & boot from USB
+### 2. Configure BIOS (watchdog & power settings) & boot from USB
 
-1. Connect an **HDMI monitor**, **USB keyboard**, **Ethernet cable**, and the **NixOS USB drive** to the DXP4800 Plus.
+1. Connect an **HDMI monitor**, **USB keyboard**, **Ethernet cable** (to the **2.5GbE** port, `Onboard LAN 2`), and the **NixOS USB drive** to the DXP4800 Plus.
 2. Power on the NAS and repeatedly tap **`Ctrl + F2`** to enter BIOS.
 3. **Disable the hardware watchdog** (under **Advanced → Watchdog Settings / Watchdog Control → Disabled**).
    > **Important:** If left enabled, the motherboard will hard-reboot the NAS every ~3 minutes when UGOS is not running.
-4. Press **`F10`** to save and exit.
-5. On reboot, repeatedly tap **`Ctrl + F12`** to open the boot menu and choose the **UEFI** entry for your NixOS USB drive.
+4. **Idle power & PCIe ASPM tuning** (press **`Ctrl + F1`** inside BIOS to reveal hidden `Advanced` / `Chipset` menus):
+   - **CPU C-States:** `Advanced → Power & Performance → CPU - Power Management Control` → `C-states = Enabled`, `Package C State Limit = Auto`.
+   - **Global PCIe ASPM:** `Advanced → PCI Subsystem Settings → PCI Express Settings` → `ASPM Support = Auto` (or `L0sL1`).
+   - **PCIe Root Port ASPM:** Set `ASPM = Auto` (or `L0sL1`) on every `PCI Express Root Port` under both:
+     - `Chipset → System Agent (SA) Configuration → PCI Express Configuration`
+     - `Chipset → PCH-IO Configuration → PCI Express Configuration` (all 3 ports)
+   - **Disable unused 10GbE NIC:** Set **`Onboard LAN 1`** (Marvell AQC113 10GbE) to **`Disabled`** (keeping **`Onboard LAN 2`**, the 2.5GbE Intel I226-V port, enabled).
+5. Press **`F10`** to save and exit.
+6. On reboot, repeatedly tap **`Ctrl + F12`** to open the boot menu and choose the **UEFI** entry for your NixOS USB drive.
 
 ### 3. Switch to SSH from your Mac
 
