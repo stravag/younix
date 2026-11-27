@@ -125,7 +125,9 @@ in
       '';
     };
 
-    # Expose HTTPS (TCP 443) strictly on tailscale0 (enforced by modules/remote-access.nix).
+    # Expose HTTPS (TCP 443) on both LAN (for split-horizon DNS without Tailscale)
+    # and tailscale0 (explicitly required by modules/remote-access.nix's allowlist).
+    networking.firewall.allowedTCPPorts = [ 443 ];
     networking.firewall.interfaces.${tsIface}.allowedTCPPorts = [ 443 ];
   };
 }

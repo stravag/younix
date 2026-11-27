@@ -97,7 +97,7 @@
     };
   };
 
-  # Expose Jellyfin over HTTPS at https://jellyfin.<domain> via Caddy (tailscale0-only).
+  # Expose Jellyfin over HTTPS at https://jellyfin.<domain> via Caddy (LAN + tailscale0).
   younix.proxy.routes.jellyfin = {
     upstream = "127.0.0.1:8096";
   };

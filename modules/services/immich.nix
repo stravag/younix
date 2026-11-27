@@ -85,7 +85,7 @@ in
   #   * /var/lib/immich/{thumbs,encoded-video} — fast NVMe cache bind-mounted into immich-server
   #   * PostgreSQL, Valkey/Redis, and ML model cache on the 1 TB NVMe SSD
   # - Intel Alder Lake QuickSync (QSV) hardware transcoding via /dev/dri/renderD128
-  # - HTTPS access via Caddy at https://photos.<domain> (tailscale0-only)
+  # - HTTPS access via Caddy at https://photos.<domain> (LAN + tailscale0)
   services.immich = {
     enable = true;
     host = "127.0.0.1";
@@ -207,7 +207,7 @@ in
     };
   };
 
-  # Expose Immich over HTTPS at https://photos.<domain> via Caddy (tailscale0-only).
+  # Expose Immich over HTTPS at https://photos.<domain> via Caddy (LAN + tailscale0).
   # Caddy v2 has unlimited request body size, no read/write transport timeout, and
   # automatic WebSocket support by default for large mobile video uploads.
   younix.proxy.routes.photos = {

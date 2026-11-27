@@ -509,7 +509,7 @@ sudo ip6tables -L younix-tailscale-in -n -v
 a single wildcard Let's Encrypt certificate (`*.<domain>`):
 
 - **Zero public ports:** DNS-01 validation updates `_acme-challenge` TXT records via the deSEC API; port `443` is
-  exposed strictly on `tailscale0` (never LAN or WAN).
+  exposed on the local LAN (for split-horizon DNS without Tailscale) and `tailscale0` (never WAN).
 - **Private domain & credentials:** Both `caddy.domain` and `caddy.desec_token` live encrypted in `secrets/secrets.yaml`
   and are rendered at runtime into `/run/secrets/rendered/caddy.env`.
 - **Adding a new service route:** Any NixOS service module simply declares
@@ -537,11 +537,12 @@ Saving, committing, and pushing automatically restarts `caddy.service` once `com
 systemctl status caddy
 journalctl -u caddy -n 50
 
-# Verify wildcard HTTPS certificate & proxy routing from a Tailscale device
+# Verify wildcard HTTPS certificate & proxy routing from a LAN or Tailscale device
 curl -i https://health.<your-delegated-subdomain>
 
-# Confirm port 443 is allowed on tailscale0 (and NOT on LAN)
+# Confirm port 443 is allowed on tailscale0 and LAN
 sudo iptables -L younix-tailscale-in -n -v
+sudo iptables -L nixos-fw -n -v | grep 443
 ```
 
 ---

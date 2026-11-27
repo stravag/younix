@@ -120,7 +120,7 @@ in
 {
   # Lightweight system metrics & systemd service log dashboard (Beszel Hub + Agent).
   # Runs natively on the 1 TB NVMe with ~40 MB RAM footprint and zero login prompt
-  # behind Tailscale-only Caddy HTTPS (https://status.<domain>).
+  # behind LAN + Tailscale Caddy HTTPS (https://status.<domain>).
   services.beszel.hub = {
     enable = true;
     package = beszelPkg;
@@ -222,7 +222,7 @@ in
     };
   };
 
-  # Expose Beszel dashboard over HTTPS at https://status.<domain> via Caddy (tailscale0-only).
+  # Expose Beszel dashboard over HTTPS at https://status.<domain> via Caddy (LAN + tailscale0).
   younix.proxy.routes.status = {
     upstream = "${hubHost}:${toString hubPort}";
   };
