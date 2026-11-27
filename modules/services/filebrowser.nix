@@ -44,6 +44,12 @@ let
         path = "${stateDir}/filebrowser.sqlite";
       };
       inherit cacheDir;
+      # Match Samba's 0660/2770 group-writable permissions (FileBrowser Quantum
+      # applies explicit chmod using these values, overriding systemd UMask).
+      filesystem = {
+        createFilePermission = "660";
+        createDirectoryPermission = "2770";
+      };
       sources = [
         (mkSource "Share" "/mnt/data/share")
         (mkSource "Media" "/mnt/data/media")

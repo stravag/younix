@@ -96,6 +96,19 @@ let
             if [ "$data_mounted" -ne 1 ]; then
               echo "Skipping $path: /mnt/data is not mounted."
             else
+              rel="''${path#/mnt/data/}"
+              # Ensure every mounted data disk branch has the top-level share
+              # directory with `root:<share>` and `2770` (setgid). Otherwise,
+              # MergerFS cloning a top-level share onto a newer disk drops the
+              # setgid bit, causing non-Samba apps (like FileBrowser) to create
+              # files owned by their own primary group instead of `<share>`.
+              for disk in /mnt/disk*; do
+                if [ -d "$disk" ] && ${pkgs.util-linux}/bin/mountpoint -q "$disk"; then
+                  ${pkgs.coreutils}/bin/mkdir -p "$disk/$rel"
+                  ${pkgs.coreutils}/bin/chown ${lib.escapeShellArg "root:${name}"} "$disk/$rel"
+                  ${pkgs.coreutils}/bin/chmod 2770 "$disk/$rel"
+                fi
+              done
               ${pkgs.coreutils}/bin/mkdir -p "$path"
               ${pkgs.coreutils}/bin/chown ${lib.escapeShellArg "root:${name}"} "$path"
               ${pkgs.coreutils}/bin/chmod 2770 "$path"
