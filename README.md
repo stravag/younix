@@ -50,7 +50,7 @@ sudo comin fetch
 
 # Quick storage check
 findmnt -R /mnt
-df -h /mnt/parity1 /mnt/disk1 /mnt/data
+df -h /mnt/parity1 /mnt/disk1 /mnt/disk2 /mnt/disk3 /mnt/data
 sudo snapraid status
 
 # Remote access status (Tailscale)

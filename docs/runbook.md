@@ -37,7 +37,7 @@ journalctl -u comin -f
 # Inspect LUKS mappers, filesystems, and mounts
 lsblk -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT
 findmnt -R /mnt
-df -h /mnt/parity1 /mnt/disk1 /mnt/data
+df -h /mnt/parity1 /mnt/disk1 /mnt/disk2 /mnt/disk3 /mnt/data
 
 # Inspect SnapRAID parity status & pending changes
 sudo snapraid status
@@ -87,6 +87,49 @@ the last sync, protecting your parity against accidental `rm -rf` or app bugs.
    sudo snapraid sync
    ```
    Automated nightly syncs will resume normally afterward.
+
+### Expanding the Array (Adding Data Drives)
+
+To add one or more new data drives (each must be ≤ the parity drive size):
+
+1. **Power down, install the drive(s), and inspect them:**
+   ```bash
+   lsblk -bo NAME,SIZE,MODEL,SERIAL,FSTYPE,PARTLABEL,MOUNTPOINT
+   ls -l /dev/disk/by-id/ata-*
+   for d in /dev/sd?; do echo "=== $d ==="; sudo smartctl -H "$d"; done
+   ```
+2. **Wipe old signatures, partition (`LUKS-DATA<N>`), encrypt with `/etc/keys/hdd.key`, format `ext4`, and lock mountpoints:**
+   ```bash
+   N=2  # <-- next data disk number (2 for d2/DATA2, 3 for d3/DATA3, ...)
+   NEW_DISK=/dev/disk/by-id/ata-<MODEL_SERIAL_NEW_DRIVE>
+
+   # Wipe any leftover RAID/filesystem signatures from a previous NAS (if present)
+   sudo wipefs -a "${NEW_DISK}"-part* "$NEW_DISK" 2>/dev/null || sudo wipefs -a "$NEW_DISK"
+
+   # Partition, encrypt (LUKS2), and format (1% reserved keeps usage safely below parity)
+   printf "label: gpt\ntype=linux, name=\"LUKS-DATA${N}\"\n" | sudo sfdisk "$NEW_DISK"
+   sudo udevadm settle
+   sudo cryptsetup luksFormat --type luks2 --batch-mode --key-file /etc/keys/hdd.key "/dev/disk/by-partlabel/LUKS-DATA${N}"
+   sudo cryptsetup open --key-file /etc/keys/hdd.key "/dev/disk/by-partlabel/LUKS-DATA${N}" "crypt_data${N}"
+   sudo mkfs.ext4 -m 1 -L "DATA${N}" "/dev/mapper/crypt_data${N}"
+   sudo cryptsetup close "crypt_data${N}"
+
+   # Lock empty mountpoint immutable so nothing can write to NVMe if unmounted
+   sudo mkdir -p "/mnt/disk${N}"
+   sudo chattr +i "/mnt/disk${N}"
+   ```
+3. **Register the drive(s) in NixOS:**
+   - Append the new `d<N>` entry to `dataDisks` in `modules/storage.nix` (automatically updates `/etc/crypttab`, ext4 mounts, MergerFS `/mnt/data`, SnapRAID `dataDisks` + `.snapraid.content`, `snapraid-precheck`, `hd-idle`, and `younix-leds`).
+   - Add `/mnt/disk<N>__Disk<N>` to `EXTRA_FILESYSTEMS` in `modules/services/beszel.nix`.
+   - Test on `testing-younix` first (`sudo comin fetch`), then merge to `main`, run `sudo comin fetch`, and `sudo reboot` once so `/mnt/data` remounts cleanly across all services and unattended boot unlock is verified.
+4. **Sync SnapRAID (and optionally rebalance):**
+   ```bash
+   sudo snapraid sync
+   sudo snapraid status
+   df -h /mnt/parity1 /mnt/disk1 /mnt/disk2 /mnt/disk3 /mnt/data
+   ```
+   - MergerFS uses `category.create=mfs` (most free space), so new writes naturally fill the new drive(s) without rebalancing.
+   - To spread existing data evenly right away instead, pause `snapraid-sync.timer`, run `sudo mergerfs.balance /mnt/data` inside `tmux`, then run `sudo snapraid sync` and restart `snapraid-sync.timer`.
 
 ---
 
@@ -140,8 +183,8 @@ sudo chmod 0400 /etc/keys/hdd.key
 
 # Verify size is exactly 4096 bytes, then unlock & mount
 sudo ls -l /etc/keys/hdd.key
-sudo systemctl start systemd-cryptsetup@crypt_parity1 systemd-cryptsetup@crypt_data1
-sudo systemctl start mnt-parity1.mount mnt-disk1.mount mnt-data.mount
+sudo systemctl start systemd-cryptsetup@crypt_parity1 systemd-cryptsetup@crypt_data1 systemd-cryptsetup@crypt_data2 systemd-cryptsetup@crypt_data3
+sudo systemctl start mnt-parity1.mount mnt-disk1.mount mnt-disk2.mount mnt-disk3.mount mnt-data.mount
 ```
 
 ### Restore `/etc/keys/sops.key` (for `/run/secrets/*` decryption)
@@ -843,7 +886,7 @@ sudo systemctl start jellyfin
 behind Caddy at **`https://status.<domain>`** (Tailscale-only).
 
 - **Metrics**: CPU, RAM/zram, load, network, temperatures, Intel QuickSync GPU (`intel_gpu_top`), NVMe root +
-  `/mnt/data` / `/mnt/disk1` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
+  `/mnt/data` / `/mnt/disk1..3` / `/mnt/parity1` capacity, and systemd service CPU/RAM/status.
 - **Logs**: Click any systemd service inside the `younix` host view to inspect its `journald` logs directly in the UI.
 - **HDD spindown safety**: Beszel polls S.M.A.R.T. every `1h` using `smartctl -n standby` and serves cached attributes
   while drives are spun down, so sleeping HDDs are not woken; `smartd -n standby,q` continues running scheduled

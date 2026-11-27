@@ -6,14 +6,25 @@ let
   hddKeyFile = "/etc/keys/hdd.key";
 
   # Data drives pooled under /mnt/data via MergerFS and protected by SnapRAID.
-  # To expand (T-009), prepare new drives as LUKS-DATA2/DATA2, LUKS-DATA3/DATA3, ...
-  # and append them here.
+  # To expand further, prepare new drives as LUKS-DATA4/DATA4, ... and append here.
   dataDisks = [
     {
       name = "d1";
       mapper = "crypt_data1";
       partLabel = "LUKS-DATA1";
       mountPoint = "/mnt/disk1";
+    }
+    {
+      name = "d2";
+      mapper = "crypt_data2";
+      partLabel = "LUKS-DATA2";
+      mountPoint = "/mnt/disk2";
+    }
+    {
+      name = "d3";
+      mapper = "crypt_data3";
+      partLabel = "LUKS-DATA3";
+      mountPoint = "/mnt/disk3";
     }
   ];
 

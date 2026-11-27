@@ -175,7 +175,7 @@ in
       LISTEN = agentListen;
       # Monitor the MergerFS pool and individual array drives alongside NVMe root.
       # statfs() reads cached superblock metadata and does not wake sleeping HDDs.
-      EXTRA_FILESYSTEMS = "/mnt/data__DataPool,/mnt/disk1__Disk1,/mnt/parity1__Parity1";
+      EXTRA_FILESYSTEMS = "/mnt/data__DataPool,/mnt/disk1__Disk1,/mnt/disk2__Disk2,/mnt/disk3__Disk3,/mnt/parity1__Parity1";
       SMART_INTERVAL = "1h";
     };
   };
