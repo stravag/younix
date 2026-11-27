@@ -33,17 +33,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
-### T-027 — Web file browser (`FileBrowser Quantum`)
-- **Status**: `in-progress`
-- **Depends on**: `T-011`, `T-012`
-- **Goal**: Deploy FileBrowser Quantum v2 natively behind Caddy HTTPS (`https://files.<domain>`) for remote browser-based access to `/mnt/data/{share,media,photos}` without needing SMB, with Samba-compatible group permissions, standby-safe indexing, and future Pocket-ID OIDC readiness.
-- **Scope**:
-  - Create `modules/services/filebrowser.nix` pulling `filebrowser-quantum` v2.x from `nixpkgs-unstable` with NVMe SQLite DB & cache (`/var/lib/filebrowser-quantum`, `/var/cache/filebrowser-quantum`), `UMask = "0007"` + `share`/`media`/`photos` group memberships, unindexed standby-safe sources (`folderPath: "/"`, `viewable: true`), `noauth` behind LAN + Tailscale Caddy HTTPS, and `younix.proxy.routes.files`.
-  - Register `modules/services/filebrowser.nix` in `flake.nix` and update `README.md`.
-- **Verification**:
-  - Deploy via `comin` and confirm `filebrowser-quantum.service` starts cleanly with no config errors.
-  - Browse `https://files.<domain>`, upload a test file to `Share`, verify it appears writable over macOS Samba with `root:share` / `0660` permissions, and confirm HDDs remain in standby when idle.
-
 ### T-016 — Paperless-ngx document management
 - **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`
@@ -214,3 +203,8 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/power.nix`, `modules/services/beszel.nix`, `flake.nix`, `README.md`
 - **Summary**: Switched Ethernet to the 2.5GbE Intel I226-V port (`enp4s0`) and disabled the unused 10GbE Marvell AQC113 (`Onboard LAN 1`) in the UGREEN BIOS (`Ctrl+F1` advanced menu), alongside enabling CPU C-states and PCIe ASPM across all root ports. Added `modules/power.nix` (`pcie_aspm.policy=powersave`, PCI/USB runtime PM excluding SATA AHCI `0x0106*` and USB HID, Intel HWP `balance_power` EPP, and `ethtool`) and wrapped `smartctl` in `modules/services/beszel.nix` with a standby-safe `hdparm -C` check + `--scan-open` → `--scan` rewrite so Beszel's hourly S.M.A.R.T. poll never wakes sleeping HDDs. Verified all 4 PCIe root ports and devices report `ASPM L1` / `L0s L1 Enabled` with zero AER/PCIe/SATA errors, CPU package idles at `0.75 W` (RAPL), and both HDDs remain in `standby` across `beszel-agent` restarts.
+
+### T-027 — Web file browser (`FileBrowser Quantum`)
+- **Status**: `done`
+- **Artifacts**: `modules/services/filebrowser.nix`, `modules/samba.nix`, `flake.nix`, `README.md`
+- **Summary**: Deployed native FileBrowser Quantum v2 (`2.0.2-stable` from `nixpkgs-unstable`) on `127.0.0.1:8095` behind Caddy HTTPS (`https://files.<domain>`, LAN + Tailscale, passwordless `noauth` ready for future Pocket-ID OIDC). Exposed `/mnt/data/{share,media,photos}` with background indexing disabled (`folderPath: "/"`, `viewable: true`) to preserve `hd-idle` HDD spindown, NVMe-backed SQLite DB & cache (`/var/lib/filebrowser-quantum`, `/var/cache/filebrowser-quantum`), `ffmpeg` previews, `server.filesystem` `0660`/`2770` permissions, and hardened systemd limits (`MemoryHigh=256M`, `MemoryMax=512M`). Updated `younix-samba-dirs.service` in `modules/samba.nix` to enforce `root:<share>` + `2770` (setgid) across every mounted `/mnt/disk*` MergerFS branch so files created by non-Samba apps inherit the share group on all drives. Verified live browsing of Share/Media/Photos and `0660` group-writable file creation.
