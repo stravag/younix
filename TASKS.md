@@ -62,14 +62,16 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 4 — Backups, Observability & CI
 
-### T-020 — GitHub Actions CI for NixOS config validation
+### T-020 — GitHub Actions CI & Dependabot for NixOS flake updates
 - **Status**: `ready`
 - **Depends on**: none
-- **Goal**: Catch Nix syntax/evaluation/build errors in CI before `comin` pulls broken commits.
+- **Goal**: Catch Nix syntax/evaluation/build errors in CI before `comin` pulls broken commits, and automate weekly flake input update PRs via GitHub Dependabot.
 - **Scope**:
   - Add `.github/workflows/check.yml` running `nix flake check` and `nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link` on pushes and PRs.
+  - Add `.github/dependabot.yml` tracking `package-ecosystem: "nix"` (grouped weekly `flake.lock` update PRs) and `package-ecosystem: "github-actions"`.
 - **Verification**:
   - Push workflow and verify green run in GitHub Actions.
+  - Trigger Dependabot check on GitHub (**Insights → Dependency graph → Dependabot**) and confirm a `flake.lock` update PR is created and validated by CI.
 
 ### T-021 — Backup & restore drill + simplified emergency runbook
 - **Status**: `ready`

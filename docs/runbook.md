@@ -686,7 +686,11 @@ Tailscale-only) with a hybrid storage layout and Intel QuickSync hardware video 
    register your personal admin account (e.g., Ranil).
 2. **Enable Intel QuickSync transcoding:** Under **Administration → Settings → Video Transcoding Settings**, select
    **Hardware Acceleration: Quick Sync** (device `/dev/dri/renderD128`) and enable hardware decoding.
-3. **Enable Storage Template (recommended):** Under **Administration → Settings → Storage Template**, enable a clean
+3. **Enable Storage 
+
+
+
+late (recommended):** Under **Administration → Settings → Storage Template**, enable a clean
    human-readable layout (e.g., `{{y}}/{{y}}-{{MM}}-{{dd}}/{{filename}}`) so uploaded originals under
    `/mnt/data/immich/library/` remain easy to browse and back up.
 4. **Align nightly jobs with SnapRAID (`04:00`):** Under **Administration → Settings → Backup Settings** and
