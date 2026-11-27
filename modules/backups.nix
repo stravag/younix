@@ -4,6 +4,26 @@ let
   nvmePgBackupDir = "/var/backup/postgresql";
   hddPgBackupDir = "/mnt/data/backups/postgres";
   nvmeJellyfinBackupDir = "/var/backup/jellyfin";
+  nvmeArrBackupDir = "/var/backup/arr";
+
+  hasArrSqliteServices =
+    config.services.radarr.enable
+    || config.services.sonarr.enable
+    || config.services.prowlarr.enable;
+
+  arrSqliteSources =
+    lib.optional config.services.radarr.enable {
+      name = "radarr";
+      dir = config.services.radarr.dataDir;
+    }
+    ++ lib.optional config.services.sonarr.enable {
+      name = "sonarr";
+      dir = config.services.sonarr.dataDir;
+    }
+    ++ lib.optional config.services.prowlarr.enable {
+      name = "prowlarr";
+      dir = "/var/lib/private/prowlarr";
+    };
 
   hasPersonalSambaShares = lib.any
     (s:
@@ -88,6 +108,24 @@ let
         ${pkgs.coreutils}/bin/mv -f "$tmp" "${nvmeJellyfinBackupDir}/$name"
       done
     ''}
+
+    ${lib.concatMapStringsSep "\n" (src: ''
+      if [ -d ${lib.escapeShellArg src.dir} ]; then
+        ${pkgs.coreutils}/bin/install -d -m 0700 -o root -g root ${lib.escapeShellArg "${nvmeArrBackupDir}/${src.name}"}
+        shopt -s nullglob
+        for db in ${lib.escapeShellArg src.dir}/*.db; do
+          name="$(${pkgs.coreutils}/bin/basename "$db")"
+          case "$name" in
+            logs.db) continue ;;
+          esac
+          tmp="${nvmeArrBackupDir}/${src.name}/.''${name}.tmp"
+          ${pkgs.coreutils}/bin/rm -f "$tmp"
+          ${pkgs.sqlite}/bin/sqlite3 -cmd ".timeout 30000" "$db" ".backup '$tmp'"
+          ${pkgs.coreutils}/bin/chmod 0600 "$tmp"
+          ${pkgs.coreutils}/bin/mv -f "$tmp" "${nvmeArrBackupDir}/${src.name}/$name"
+        done
+      fi
+    '') arrSqliteSources}
   '';
 in
 {
@@ -195,6 +233,11 @@ in
         nvmeJellyfinBackupDir
         config.services.jellyfin.dataDir
       ]
+      ++ lib.optional hasArrSqliteServices nvmeArrBackupDir
+      ++ lib.optional config.services.radarr.enable config.services.radarr.dataDir
+      ++ lib.optional config.services.sonarr.enable config.services.sonarr.dataDir
+      ++ lib.optional config.services.prowlarr.enable "/var/lib/private/prowlarr"
+      ++ lib.optional config.services.sabnzbd.enable config.services.sabnzbd.stateDir
       ++ lib.optional config.services.paperless.enable config.services.paperless.dataDir;
 
     exclude = [
@@ -211,6 +254,27 @@ in
       "/var/lib/jellyfin/data/*.db"
       "/var/lib/jellyfin/data/*.db-wal"
       "/var/lib/jellyfin/data/*.db-shm"
+
+      # Regenerable *arr / SABnzbd logs, artwork caches, redundant zip backups, and
+      # live SQLite files (captured atomically in /var/backup/arr instead)
+      "/var/lib/radarr/**/logs"
+      "/var/lib/radarr/**/MediaCover"
+      "/var/lib/radarr/**/Backups"
+      "/var/lib/radarr/**/*.db"
+      "/var/lib/radarr/**/*.db-wal"
+      "/var/lib/radarr/**/*.db-shm"
+      "/var/lib/sonarr/**/logs"
+      "/var/lib/sonarr/**/MediaCover"
+      "/var/lib/sonarr/**/Backups"
+      "/var/lib/sonarr/**/*.db"
+      "/var/lib/sonarr/**/*.db-wal"
+      "/var/lib/sonarr/**/*.db-shm"
+      "/var/lib/private/prowlarr/logs"
+      "/var/lib/private/prowlarr/Backups"
+      "/var/lib/private/prowlarr/*.db"
+      "/var/lib/private/prowlarr/*.db-wal"
+      "/var/lib/private/prowlarr/*.db-shm"
+      "/var/lib/sabnzbd/logs"
 
       # macOS Finder / SMB metadata clutter & partial sync files
       ".DS_Store"

@@ -33,6 +33,21 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ## Phase 3 — Self-Hosted Services
 
+### T-028 — Usenet `*arr` media automation stack (`SABnzbd`, `Prowlarr`, `Radarr`, `Sonarr`)
+- **Status**: `in-progress`
+- **Depends on**: `T-007`, `T-011`, `T-012`, `T-014`
+- **Goal**: Deploy the core native NixOS Usenet `*arr` stack (`SABnzbd`, `Prowlarr`, `Radarr`, `Sonarr`) behind Caddy HTTPS, sharing the `media` group for atomic moves from `/mnt/data/media/downloads` into `/mnt/data/media/{movies,shows}`, excluding transient downloads from SnapRAID, and backing up `*arr`/SABnzbd configs and SQLite databases offsite via `restic`.
+- **Scope**:
+  - Create `modules/services/arr.nix` and register it in `flake.nix`.
+  - Provision `/mnt/data/media/downloads/{incomplete,complete/{movies,shows}}` (`root:media`, `2770`) via `younix-arr-dirs.service`.
+  - Inject encrypted `caddy/domain` into SABnzbd `host_whitelist` via `sops.templates."sabnzbd-host.ini"` with `allowConfigWrite = true` for Web UI Eweka configuration.
+  - Exclude `/media/downloads/` from SnapRAID in `modules/storage.nix`.
+  - Add atomic SQLite snapshots (`/var/backup/arr`) and state directories for Radarr, Sonarr, Prowlarr, and SABnzbd to `modules/backups.nix`.
+- **Verification**:
+  - Push to `main` (or `testing-younix`) and run `sudo comin fetch` on `younix`.
+  - Confirm `sabnzbd`, `prowlarr`, `radarr`, and `sonarr` are `active (running)` and reachable at `https://{sabnzbd,prowlarr,radarr,sonarr}.<domain>`.
+  - Configure Eweka in SABnzbd, indexer(s) in Prowlarr, and root folders (`/mnt/data/media/movies`, `/mnt/data/media/shows`) in Radarr/Sonarr; verify an end-to-end test download moves cleanly into Jellyfin's library.
+
 ### T-016 — Paperless-ngx document management
 - **Status**: `ready`
 - **Depends on**: `T-006`, `T-007`, `T-011`, `T-012`

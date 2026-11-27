@@ -250,6 +250,7 @@ in
       ".TemporaryItems"
       ".Trashes"
       "/timemachine/"
+      "/media/downloads/"
     ];
 
     touchBeforeSync = true;

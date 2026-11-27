@@ -38,6 +38,7 @@
           ./modules/remote-access.nix
           ./modules/proxy.nix
           ./modules/services/jellyfin.nix
+          ./modules/services/arr.nix
           ./modules/services/immich.nix
           ./modules/services/beszel.nix
           ./modules/services/filebrowser.nix
