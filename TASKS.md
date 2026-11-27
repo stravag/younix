@@ -31,22 +31,6 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 
 ---
 
-## Phase 1 — Foundation (Secrets & Storage)
-
-### T-009 — Expand HDD array with 2nd pair of 4 TB drives (post-migration)
-- **Status**: `ready`
-- **Depends on**: `T-007`
-- **Goal**: After migrating data from the old NAS, install the remaining 2x 4 TB drives and grow the MergerFS + SnapRAID pool to 12 TB usable (1 parity + 3 data).
-- **Scope**:
-  - Document the exact expansion procedure in `docs/runbook.md` (partition `LUKS-DATA2`/`LUKS-DATA3`, LUKS2 format with `/etc/keys/hdd.key`, `mkfs.ext4 -m 1 -L DATA2/DATA3`, `chattr +i` mountpoints, append `d2`/`d3` to `dataDisks` in `modules/storage.nix`, run `snapraid sync`, optionally `mergerfs.balance`).
-  - Update `dataDisks` in `modules/storage.nix` when the drives are installed.
-- **Manual steps**:
-  - Copy data from old NAS to `younix`, physically install bays 3 & 4, and run the expansion.
-- **Verification**:
-  - Confirm bays 1–4 LEDs are all active white (`younix-leds`), `df -h /mnt/data` shows ~11 TB / 12 TB usable space, and `snapraid status` + scrub pass with 0 errors.
-
----
-
 ## Phase 3 — Self-Hosted Services
 
 ### T-016 — Paperless-ngx document management
@@ -207,6 +191,11 @@ Single-source tasklist for building out `younix` (UGREEN NASync DXP4800 Plus run
 - **Status**: `done`
 - **Artifacts**: `modules/alerts.nix`, `modules/storage.nix`, `flake.nix`, `secrets/secrets.yaml`, `docs/runbook.md`, `README.md`
 - **Summary**: Deployed `ntfy.sh` push failure alerts with topic URL and optional access token encrypted in `secrets/secrets.yaml` (`ntfy/url`, `ntfy/token` → `/run/secrets/rendered/ntfy.env`). Added `younix-notify` CLI (with 4 KB inline payload truncation) and reusable `younix-notify@.service` (`OnFailure=younix-notify@%n.service` with unit exit status and last 25 `journalctl` lines) wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`. Wired `smartd` S.M.A.R.T. warnings (`-m root -M exec`, `urgent` priority) and `comin` `postBuildCommand` / `postDeploymentCommand` failure hooks (`COMIN_STATUS=failed`). Verified live delivery of `younix: restic-backups-offsite failed` on phone/Mac and confirmed `smartd` monitoring all 4 drives cleanly.
+
+### T-009 — Expand HDD array with 2nd pair of 4 TB drives (post-migration)
+- **Status**: `done`
+- **Artifacts**: `modules/storage.nix`, `modules/services/beszel.nix`, `docs/runbook.md`, `README.md`
+- **Summary**: Decommissioned the old NAS, installed its two 4 TB drives into bays 3 & 4 (`LUKS-DATA2`/`DATA2` on `WD40EFRX` in bay 3 and `LUKS-DATA3`/`DATA3` on `WD40EFAX` in bay 4), wiped old `linux_raid_member` signatures, LUKS2-encrypted with `/etc/keys/hdd.key`, formatted `ext4 -m 1`, locked `/mnt/disk2` and `/mnt/disk3` with `chattr +i`, added `d2`/`d3` to `dataDisks` in `modules/storage.nix` and `Disk2`/`Disk3` to Beszel `EXTRA_FILESYSTEMS`, and documented the expansion procedure in `docs/runbook.md`. Verified unattended 4-drive LUKS2 unlock across reboot, MergerFS pool at `11T` (`9.3T` free), `snapraid sync` + `snapraid status` with 0 errors and `.snapraid.content` on all 3 data drives + NVMe, `hd-idle` managing all 4 drives at `1800s`, and `younix-leds` showing all 4 bays active white + steady white Power LED.
 
 ### T-026 — Idle power optimization & BIOS PCIe ASPM
 - **Status**: `done`
