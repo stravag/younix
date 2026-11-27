@@ -5,7 +5,17 @@ on:
     branches:
       - main
       - testing-younix
+    paths-ignore:
+      - "README.md"
+      - "TASKS.md"
+      - "AGENTS.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "README.md"
+      - "TASKS.md"
+      - "AGENTS.md"
+      - "docs/**"
   workflow_dispatch:
 
 permissions:
@@ -20,11 +30,6 @@ jobs:
     name: Check & Build younix
     runs-on: ubuntu-latest
     steps:
-      - name: Free runner disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h /
-
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -37,4 +42,5 @@ jobs:
         run: nix flake check
 
       - name: Build younix NixOS toplevel
+        if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
         run: nix build .#nixosConfigurations.younix.config.system.build.toplevel --no-link
