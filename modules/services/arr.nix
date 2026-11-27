@@ -41,6 +41,11 @@ in
     }
   ];
 
+  # SABnzbd depends on `unrar` (unfreeRedistributable) to unpack Usenet RAR
+  # archives. Keep unfree packages tightly allowlisted to just `unrar`.
+  nixpkgs.config.allowUnfreePredicate = pkg:
+    builtins.elem (lib.getName pkg) [ "unrar" ];
+
   # Inject the encrypted Caddy base domain into SABnzbd's host_whitelist at
   # runtime via sops-nix so https://sabnzbd.<domain> works immediately without
   # committing personal domain names to this public repository.
