@@ -16,7 +16,7 @@ GitOps-managed NixOS configuration for a **UGREEN NASync DXP4800 Plus**.
 - `.sops.yaml` — `sops` encryption rules & public `age` recipients (macOS admin + `younix`).
 - `hosts/younix/configuration.nix` — Host-specific system configuration.
 - `hosts/younix/hardware-configuration.nix` — Hardware & root filesystem definitions generated on the NAS.
-- `modules/gitops.nix` — Pull-based GitOps deployment with `comin` (polls `main` every 1 hour; supports `testing-younix`).
+- `modules/gitops.nix` — Pull-based GitOps deployment with `comin` (polls `main` every 60s; supports `testing-younix`).
 - `modules/secrets.nix` — Encrypted declarative secrets via `sops-nix` (decrypted via `/etc/keys/sops.key` into `/run/secrets/`).
 - `modules/thermals.nix` — Out-of-tree `it87` driver (`IT8613E`), one-shot `udev` hardware Smart Fan tuning (zero fan daemon), `thermald`, and `powersave` CPU governor.
 - `modules/power.nix` — Idle power tuning: PCIe ASPM (`powersave` policy, ready for BIOS Native ASPM), PCI/USB runtime PM, Intel HWP `balance_power` EPP, and `ethtool`.

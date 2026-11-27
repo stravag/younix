@@ -8,7 +8,7 @@ For initial one-time OS and disk setup, see the [Bootstrap Guide](bootstrap.md).
 ## 1. Day-to-Day GitOps Workflow (`comin`)
 
 1. Edit Nix files locally on your Mac, commit, and `git push` to `main`.
-2. `comin` on `younix` polls `origin/main` every **1 hour** (`3600s` in `modules/gitops.nix`), builds the new system,
+2. `comin` on `younix` polls `origin/main` every **60 seconds** (`60s` in `modules/gitops.nix`), builds the new system,
    and switches to it automatically.
 3. For risky changes (storage, networking, firewall, SSH, bootloader), push to branch **`testing-younix`** instead—
    `comin` activates it temporarily (`test` mode), so a reboot automatically reverts to `main`.
@@ -977,7 +977,7 @@ sudo hdparm -C /dev/sd?   # verify sleeping drives stay in standby while bay LED
 - **`younix-notify`** — CLI helper reading `/run/secrets/rendered/ntfy.env` (`ntfy/url` and optional `ntfy/token` from `secrets/secrets.yaml`).
 - **`younix-notify@.service`** — Reusable systemd `OnFailure=younix-notify@%n.service` template unit attaching the failed unit's exit status and last 25 journal lines. Wired to `snapraid-precheck`, `snapraid-sync`, `snapraid-scrub`, `postgresqlBackup`, `younix-postgres-hdd-sync`, `restic-backups-offsite`, `comin`, and `smartd`.
 - **`smartd`** — Executes `younix-smartd-notify` via `-m root -M exec` on S.M.A.R.T. warnings/errors (`urgent` priority).
-- **`comin`** — Runs `younix-comin-notify` via `postBuildCommand` and `postDeploymentCommand`: sends a `high` alert on build/deploy failures (`COMIN_STATUS=failed`) and a `low` info notification on successful deployments (`COMIN_PHASE=deploy`, `COMIN_STATUS=done`).
+- **`comin`** — Runs `younix-comin-notify` via `postBuildCommand` and `postDeploymentCommand`: sends a `high` alert on build/deploy failures (`COMIN_STATUS=failed`), a `default` alert when a successful deployment requires a reboot (`/run/booted-system` vs `/run/current-system` kernel/initrd/modules/params mismatch), and a `low` info notification on normal successful deployments (`COMIN_PHASE=deploy`, `COMIN_STATUS=done`).
 
 ### Secrets Setup (in `secrets/secrets.yaml` on macOS)
 

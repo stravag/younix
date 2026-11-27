@@ -12,7 +12,7 @@
       {
         name = "origin";
         url = "https://github.com/stravag/younix.git";
-        poller.period = 3600; # 1h
+        poller.period = 60; # 1m (comin default)
         branches.main.name = "main";
       }
     ];
